@@ -1,0 +1,17 @@
+{
+    "Color":
+        [
+            "White",
+            "Blue",
+            "Black",
+            "Red",
+            "Green"
+        ],
+    "Rarity":
+        [
+            "Common",
+            "Uncommon",
+            "Rare",
+            "Mythic"
+        ]
+}

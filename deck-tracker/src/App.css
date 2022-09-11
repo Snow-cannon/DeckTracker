@@ -36,3 +36,35 @@
     transform: rotate(360deg);
   }
 }
+
+#bx{
+  width:210px;
+  height:80px;
+  position:absolute;
+  top:10%;
+  left:0;
+  overflow:hidden;
+  display: flex;
+  align-items: center;
+}
+#bx > .b{
+  position:absolute;
+  width:fit-content;
+  height:fit-content;
+  background:blue;
+  left:-58%;
+  transition:0.3s ease;
+}
+
+#bx:hover > .b{
+  left:0px;
+}
+
+.mtgCard{
+  display: flex;
+}
+
+.parentFlexRight{
+  display: flex;
+  margin-left: auto;
+}
