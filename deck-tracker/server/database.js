@@ -30,7 +30,8 @@ class Database {
             set: 'string',
             colors: 'string',
             cmc: 'number',
-            rarity: 'number',
+            rarity: 'string',
+            default: 'boolean',
             data: 'string'
         };
 
@@ -41,19 +42,22 @@ class Database {
                 colors varchar(5),
                 cmc int,
                 rarity varchar(20),
+                default boolean,
                 data text
             );
         `;
 
         this.deckContentTableTypes = {
             did: 'string',
-            name: 'string'
+            name: 'string',
+            needed: 'number'
         }
 
         const deckContentTable = `
             CREATE TABLE IF NOT EXISTS DecksContent (
                 did uuid,
                 name varchar(200),
+                needed int,
                 FOREIGN KEY (name) REFERENCES Cards,
                 FOREIGN KEY (did) REFERENCES Decks
             );
@@ -62,40 +66,41 @@ class Database {
         this.deckTableTypes = {
             did: 'string',
             name: 'string',
-            uid: 'string'
+            email: 'string'
         }
 
         const deckTable = `
             CREATE TABLE IF NOT EXISTS Decks (
                 did uuid PRIMARY KEY,
                 name varchar(100),
-                uid uuid,
-                FOREIGN KEY (uid) REFERENCES Users
+                email varchar(320),
+                FOREIGN KEY (email) REFERENCES Users
             );
         `;
 
         this.userTableTypes = {
-            id: 'string',
-            password: 'string'
+            email: 'string',
+            password: 'string',
+            username: 'string'
         }
 
         const userTable = `
             CREATE TABLE IF NOT EXISTS Users (
-                uid uuid PRIMARY KEY,
+                email varchar(320) PRIMARY KEY,
                 password varchar(50)
             );
         `;
 
         this.collectionTableTypes = {
             name: 'string',
-            uid: 'string',
+            email: 'string',
             has: 'number'
         }
 
         const collectionTable = `
             CREATE TABLE IF NOT EXISTS Collection (
                 name varchar(200) PRIMARY KEY,
-                uid uuid PRIMARY KEY,
+                email varchar(320) PRIMARY KEY,
                 has int,
                 FOREIGN KEY (name) REFERENCES Cards,
                 FOREIGN KEY (uid) REFERENCES Users
