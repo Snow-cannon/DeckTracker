@@ -8,6 +8,29 @@ class Database {
 
     constructor(dburl) {
         this.dburl = dburl;
+
+        this.cardTableTypes = {};
+        this.deckContentTableTypes = {};
+        this.collectionTableTypes = {};
+        this.userTableTypes = {};
+        this.deckTableTypes = {};
+
+        this.USERS = 'user';
+        this.DECKS = 'deck';
+        this.COLLECTION = 'collection';
+        this.CONTENT = 'content';
+        this.CARDS = 'card';
+    }
+
+    typeTable(table) {
+        let typeTables = {
+            card: this.cardTableTypes,
+            content: this.deckContentTableTypes,
+            collection: this.collectionTableTypes,
+            user: this.userTableTypes,
+            deck: this.deckTableTypes,
+        }
+        return typeTables[table];
     }
 
     async connect() {
@@ -107,11 +130,11 @@ class Database {
             );
         `;
 
-        await this.client.query(cardTable);
-        await this.client.query(userTable);
-        await this.client.query(deckTable);
-        await this.client.query(collectionTable);
-        await this.client.query(deckContentTable);
+        // await this.client.query(cardTable);
+        // await this.client.query(userTable);
+        // await this.client.query(deckTable);
+        // await this.client.query(collectionTable);
+        // await this.client.query(deckContentTable);
 
     }
 
@@ -132,11 +155,33 @@ class Database {
      */
     async addCard(name, set, colors, cmc, rarity, bulk) {
         let query = 'INSERT INTO Cards (name, set, colors, cmc, rarity, bulk) VALUES ($1, $2, $3, $4, $5, $6);';
-        
+
+    }
+
+    /**
+     * Takes in a table object and compares the types to the input object.
+     * Options: user, deck, card, collection, deckContent
+     * 
+     * @param {string} table
+     * @param {object} query
+     */
+    checkTypes(table, query) {
+        let missing = {};
+        let invalid = {};
+        let types = this.typeTable(table);
+        for (const key in types) {
+            if (!query.hasOwnProperty(key)) {
+                missing[key] = types[key];
+            } else if (typeof query[key] !== types[key]) {
+                invalid[key] = query[key];
+            }
+        }
+        return { missing: missing, invalid: invalid, ok: Object.keys(invalid).length === 0 && Object.keys(missing).length === 0 };
     }
 
 }
 
-const database = new Database(process.env.DATABASE_URL);
+const db = new Database(process.env.DATABASE_URL);
+await db.init();
 
-export { database }
+export { db }
