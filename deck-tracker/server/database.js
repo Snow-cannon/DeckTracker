@@ -9,11 +9,13 @@ class Database {
     constructor(dburl) {
         this.dburl = dburl;
 
-        this.cardTableTypes = {};
-        this.deckContentTableTypes = {};
-        this.collectionTableTypes = {};
-        this.userTableTypes = {};
-        this.deckTableTypes = {};
+        this.emptyTable = () => { return { types: {}, cols: [], name: '', ok: false } };
+
+        this.deckTable = this.emptyTable();
+        this.cardTable = this.emptyTable();
+        this.collectionTable = this.emptyTable();
+        this.deckContentTable = this.emptyTable();
+        this.userTable = this.emptyTable();
 
         this.USERS = 'user';
         this.DECKS = 'deck';
@@ -22,15 +24,15 @@ class Database {
         this.CARDS = 'card';
     }
 
-    typeTable(table) {
-        let typeTables = {
-            card: this.cardTableTypes,
-            content: this.deckContentTableTypes,
-            collection: this.collectionTableTypes,
-            user: this.userTableTypes,
-            deck: this.deckTableTypes,
+    getTable(table) {
+        let tableObj = {
+            card: this.cardTable,
+            content: this.deckContentTable,
+            collection: this.collectionTable,
+            user: this.userTable,
+            deck: this.deckTable
         }
-        return typeTables[table];
+        return tableObj[table] || this.emptyTable();
     }
 
     async connect() {
@@ -48,7 +50,7 @@ class Database {
 
     async init() {
 
-        this.cardTableTypes = {
+        this.cardTable.types = {
             name: 'string',
             set: 'string',
             colors: 'string',
@@ -57,6 +59,9 @@ class Database {
             default: 'boolean',
             data: 'string'
         };
+        this.cardTable.cols = ['name', 'set', 'colors', 'cmc', 'rarity', 'default', 'data'];
+        this.cardTable.name = 'Cards';
+        this.cardTable.ok = true;
 
         const cardTable = `
             CREATE TABLE IF NOT EXISTS Cards (
@@ -70,14 +75,17 @@ class Database {
             );
         `;
 
-        this.deckContentTableTypes = {
+        this.deckContentTable.types = {
             did: 'string',
             name: 'string',
             needed: 'number'
-        }
+        };
+        this.deckContentTable.cols = ['data', 'name', 'needed'];
+        this.deckContentTable.name = 'DeckContent';
+        this.deckContentTable.ok = true;
 
         const deckContentTable = `
-            CREATE TABLE IF NOT EXISTS DecksContent (
+            CREATE TABLE IF NOT EXISTS DeckContent (
                 did uuid,
                 name varchar(200),
                 needed int,
@@ -86,11 +94,14 @@ class Database {
             );
         `;
 
-        this.deckTableTypes = {
+        this.deckTable.types = {
             did: 'string',
             name: 'string',
             email: 'string'
-        }
+        };
+        this.deckTable.cols = ['did', 'name', 'email'];
+        this.deckTable.name = 'Decks';
+        this.deckTable.ok = true;
 
         const deckTable = `
             CREATE TABLE IF NOT EXISTS Decks (
@@ -101,11 +112,14 @@ class Database {
             );
         `;
 
-        this.userTableTypes = {
+        this.userTable.types = {
             email: 'string',
             password: 'string',
             username: 'string'
-        }
+        };
+        this.userTable.cols = ['email', 'password', 'username'];
+        this.userTable.name = 'Users';
+        this.userTable.ok = true;
 
         const userTable = `
             CREATE TABLE IF NOT EXISTS Users (
@@ -114,11 +128,14 @@ class Database {
             );
         `;
 
-        this.collectionTableTypes = {
+        this.collectionTable.types = {
             name: 'string',
             email: 'string',
             has: 'number'
-        }
+        };
+        this.collectionTable.cols = ['name', 'email', 'has']
+        this.collectionTable.name = 'Collection';
+        this.collectionTable.ok = true;
 
         const collectionTable = `
             CREATE TABLE IF NOT EXISTS Collection (
@@ -145,17 +162,17 @@ class Database {
     }
 
     /**
+     * Takes in a query object and adds the card to the database if possible
      * 
-     * @param {string} name 
-     * @param {string} set 
-     * @param {string[]} colors 
-     * @param {number} cmc 
-     * @param {string} rarity 
-     * @param {object} bulk 
+     * @param {string} query
      */
-    async addCard(name, set, colors, cmc, rarity, bulk) {
-        let query = 'INSERT INTO Cards (name, set, colors, cmc, rarity, bulk) VALUES ($1, $2, $3, $4, $5, $6);';
-
+    async addCard(query) {
+        let valid = this.checkTypes(db.CARDS, query);
+        if (valid.ok) {
+            let queryString = 'INSERT INTO Cards (name, set, colors, cmc, rarity, bulk) VALUES ($1, $2, $3, $4, $5, $6);';
+        } else {
+            return { ok: false, error: valid.toString() }
+        }
     }
 
     /**
@@ -168,15 +185,52 @@ class Database {
     checkTypes(table, query) {
         let missing = {};
         let invalid = {};
-        let types = this.typeTable(table);
-        for (const key in types) {
-            if (!query.hasOwnProperty(key)) {
-                missing[key] = types[key];
-            } else if (typeof query[key] !== types[key]) {
-                invalid[key] = query[key];
+        let valid = {};
+        let realTable = this.getTable(table);
+        let types = realTable.types;
+        if (realTable.ok) {
+            for (const key in realTable) {
+                if (!query.hasOwnProperty(key)) {
+                    missing[key] = realTable[key];
+                } else if (typeof query[key] !== realTable[key]) {
+                    invalid[key] = query[key];
+                } else {
+                    valid[key] = query[key];
+                }
             }
+            return {
+                missing: missing,
+                missingCount: Object.keys(missing).length,
+                invalid: invalid,
+                invalidCount: Object.keys(invalid).length,
+                valid: valid,
+                validCount: Object.keys(valid).length,
+                toString: function () {
+                    let invalid = `${this.invalidCount ? `invalid: ${Object.keys(this.invalid).join(', ')}` : ''}`;
+                    let missing = `\n${this.missingCount ? `missing: ${Object.keys(this.missing).join(', ')}` : ''}`;
+                    let valid = `\n${this.valid ? `valid  : ${Object.keys(this.valid).join(', ')}` : ''}`;
+                    return invalid + missing + valid;
+                },
+                ok: Object.keys(valid).length === Object.keys(realTable).length
+            };
+        } else {
+            return { ok: false, error: 'Invalid table' };
         }
-        return { missing: missing, invalid: invalid, ok: Object.keys(invalid).length === 0 && Object.keys(missing).length === 0 };
+    }
+
+    layoutQueryValueArray(table, query) {
+        let realTable = this.getTable(table);
+        if (realTable.ok) {
+            return realTable.cols.map(c => {
+                if (query.hasOwnProperty(c)) {
+                    return query[c];
+                } else {
+                    return undefined;
+                }
+            }).filter(c => c !== undefined);
+        } else {
+            return { ok: false, error: `table ${table} does not exist` }
+        }
     }
 
 }
