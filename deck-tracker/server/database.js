@@ -7,16 +7,20 @@ const { Pool } = pg;
 class Database {
 
     constructor(dburl) {
+        //URL for connecting to the DB
         this.dburl = dburl;
 
+        //Definition of an empty table
         this.emptyTable = () => { return { types: {}, cols: [], name: '', ok: false } };
 
+        //Initialize all tables as invalid empty tables
         this.deckTable = this.emptyTable();
         this.cardTable = this.emptyTable();
         this.collectionTable = this.emptyTable();
         this.deckContentTable = this.emptyTable();
         this.userTable = this.emptyTable();
 
+        //Constants for table searching
         this.USERS = 'user';
         this.DECKS = 'deck';
         this.COLLECTION = 'collection';
@@ -24,6 +28,7 @@ class Database {
         this.CARDS = 'card';
     }
 
+    //Get the table from a string
     getTable(table) {
         let tableObj = {
             card: this.cardTable,
@@ -35,6 +40,7 @@ class Database {
         return tableObj[table] || this.emptyTable();
     }
 
+    //Connect to the DB
     async connect() {
         this.pool = new Pool({
             connectionString: this.dburl,
@@ -48,6 +54,7 @@ class Database {
         await this.init();
     }
 
+    //Initialize the DB with tables and initialize the table objects
     async init() {
 
         this.cardTable.types = {
@@ -147,6 +154,7 @@ class Database {
             );
         `;
 
+        //Commented until DB exists
         // await this.client.query(cardTable);
         // await this.client.query(userTable);
         // await this.client.query(deckTable);
@@ -183,21 +191,34 @@ class Database {
      * @param {object} query
      */
     checkTypes(table, query) {
+        //Create storage objs
         let missing = {};
         let invalid = {};
         let valid = {};
+
+        //Get the table
         let realTable = this.getTable(table);
+        
+        //Get the types object
         let types = realTable.types;
+
+        //Make sure the table is ok
         if (realTable.ok) {
-            for (const key in realTable) {
+            //Check every type in the query obj
+            for (const key in types) {
+                //If the key does not exist in the query, add it to missing
                 if (!query.hasOwnProperty(key)) {
-                    missing[key] = realTable[key];
-                } else if (typeof query[key] !== realTable[key]) {
+                    missing[key] = types[key];
+                //If the key exists but is not the right type, add it to invalid
+                } else if (typeof query[key] !== types[key]) {
                     invalid[key] = query[key];
+                //If it exists and is the right type, add it to valid
                 } else {
                     valid[key] = query[key];
                 }
             }
+
+            //Return an object with the missing, invalid, and valid data
             return {
                 missing: missing,
                 missingCount: Object.keys(missing).length,
@@ -205,32 +226,48 @@ class Database {
                 invalidCount: Object.keys(invalid).length,
                 valid: valid,
                 validCount: Object.keys(valid).length,
+                //Add a toString function for logging data
                 toString: function () {
                     let invalid = `${this.invalidCount ? `invalid: ${Object.keys(this.invalid).join(', ')}` : ''}`;
                     let missing = `\n${this.missingCount ? `missing: ${Object.keys(this.missing).join(', ')}` : ''}`;
                     let valid = `\n${this.valid ? `valid  : ${Object.keys(this.valid).join(', ')}` : ''}`;
                     return invalid + missing + valid;
                 },
-                ok: Object.keys(valid).length === Object.keys(realTable).length
+                //Return not ok if the number of valid keys is niot the same as the number of input keys
+                ok: Object.keys(valid).length === Object.keys(realTable.types).length
             };
         } else {
+            //Return an error if the table is invalid
             return { ok: false, error: 'Invalid table' };
         }
     }
 
     layoutQueryValueArray(table, query) {
+        //Get the table object
         let realTable = this.getTable(table);
+
+        //Determine that the table is valid
         if (realTable.ok) {
-            return realTable.cols.map(c => {
+
+            //Force the values from the query object to be in the correct column order
+            return realTable.cols.reduce((p, c) => {
+                //Only add values that exist in the query
                 if (query.hasOwnProperty(c)) {
-                    return query[c];
+                    p.cols.push(c);
+                    p.values.push(query[c]);
+                    return p;
                 } else {
-                    return undefined;
+                    return p;
                 }
-            }).filter(c => c !== undefined);
+            }, { cols: [], values: [] });
         } else {
+            //Return an error if the table is not ok
             return { ok: false, error: `table ${table} does not exist` }
         }
+    }
+
+    buildSelectQuery(table, query, strict){
+
     }
 
 }
