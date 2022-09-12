@@ -7,10 +7,15 @@ import filterOptions from "./filterOptions.json";
 import CardList from "./CardList.js";
 import { Box } from "@mui/system";
 import PrimarySearchAppBar from "./navBar.js";
+import sampleCards from "./sampleCards.json";
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 
-let cards = ["Thoughtsieze","Thoughtsieze","Thoughtsieze","Thoughtsieze","Thoughtsieze","Thoughtsieze","Thoughtsieze","Thoughtsieze","Thoughtsieze","Thoughtsieze","Thoughtsieze"];
+let cards = [];
+for(const card in sampleCards){
+  cards.push({name: card, ...sampleCards[card]})
+}
+cards.push({name: "A", colors: ["W", "U", "B", "R", "G"]})
 
 root.render(
   <React.StrictMode>

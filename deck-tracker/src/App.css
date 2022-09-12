@@ -62,9 +62,28 @@
 
 .mtgCard{
   display: flex;
+  height: 50px;
+  justify-content: center;
+  align-items: center;
 }
 
 .parentFlexRight{
+  height: 100%;
+  width: 55%;
   display: flex;
   margin-left: auto;
+}
+
+.manaIconContainer{
+  height: 100%;
+  display: flex;
+  align-items: center;
+  margin-right: auto;
+}
+
+.manaIcon{
+  width: auto;
+  display: flex;
+  height: 50%;
+  margin: 4px;
 }
