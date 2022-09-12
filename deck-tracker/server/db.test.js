@@ -91,4 +91,8 @@ T.test(layout1.cols[2] === 'cmc', 'Third cols element is "cmc"', 'Third cols ele
 T.test(layout1.cols[3] === 'data', 'Fourth cols element is "data"', 'Fourth cols element is not the data');
 T.test(layout1.values.length === 4, 'Length of cols is 4', 'Length of cols is not 4');
 
+T.skip('getTable');
+T.skip('checkTypes');
+T.skip('layoutQueryValueArray');
+
 T.log();

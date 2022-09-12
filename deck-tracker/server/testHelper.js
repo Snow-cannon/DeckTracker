@@ -18,6 +18,7 @@ export class Tester {
             failed: true
         };
         this.currGroup = 'Tests';
+        this.skipped = [];
     }
 
     init(options) {
@@ -48,27 +49,33 @@ export class Tester {
         console.log(color_string('\nTesting...\n', 160));
 
         for (const key in this.results) {
-            console.log(color_string(key, 63));
-            console.log(color_string(`  Passed: ${this.results[key].pass.length}`, this.results[key].fail.length === 0 ? 46 : 124));
-            console.log(color_string(`  Failed: ${this.results[key].fail.length}`, this.results[key].fail.length === 0 ? 46 : 124));
-            if (this.options.failed) {
-                this.results[key].fail.forEach(s => {
-                    console.log(s);
-                });
+            if (!this.skipped.includes(key)) {
+                console.log(color_string(key, 63));
+                console.log(color_string(`  Passed: ${this.results[key].pass.length}`, this.results[key].fail.length === 0 ? 46 : 124));
+                console.log(color_string(`  Failed: ${this.results[key].fail.length}`, this.results[key].fail.length === 0 ? 46 : 124));
+                if (this.options.failed) {
+                    this.results[key].fail.forEach(s => {
+                        console.log(s);
+                    });
+                }
+                if (this.options.passed) {
+                    this.results[key].pass.forEach(s => {
+                        console.log(s);
+                    });
+                }
+                if (this.results[key].fail.length === 0) {
+                    console.log(color_string('  All tests passed!', 10));
+                }
+                console.log('')
             }
-            if (this.options.passed) {
-                this.results[key].pass.forEach(s => {
-                    console.log(s);
-                });
-            }
-            if (this.results[key].fail.length === 0) {
-                console.log(color_string('  All tests passed!\n', 10));
-            }
-            console.log('')
         }
 
-        console.log(color_string('Testing Complete!', 160));
+        console.log(color_string('Testing Complete!\n', 160));
 
+    }
+
+    skip(...args) {
+        this.skipped = this.skipped.concat(args);
     }
 
 }
