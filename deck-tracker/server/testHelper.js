@@ -44,9 +44,15 @@ export class Tester {
         }
     }
 
-    log() {
+    log(only) {
         //Print th results
         console.log(color_string('\nTesting...\n', 160));
+
+        if (only === 'all') {
+            this.skipped = [];
+        } else if (only) {
+            this.skipped = Object.keys(this.results).filter(x => x !== only);
+        }
 
         for (const key in this.results) {
             if (!this.skipped.includes(key)) {
