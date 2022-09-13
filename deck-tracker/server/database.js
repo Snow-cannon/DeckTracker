@@ -198,7 +198,7 @@ class Database {
 
         //Get the table
         let realTable = this.getTable(table);
-        
+
         //Get the types object
         let types = realTable.types;
 
@@ -209,10 +209,10 @@ class Database {
                 //If the key does not exist in the query, add it to missing
                 if (!query.hasOwnProperty(key)) {
                     missing[key] = types[key];
-                //If the key exists but is not the right type, add it to invalid
+                    //If the key exists but is not the right type, add it to invalid
                 } else if (typeof query[key] !== types[key]) {
                     invalid[key] = query[key];
-                //If it exists and is the right type, add it to valid
+                    //If it exists and is the right type, add it to valid
                 } else {
                     valid[key] = query[key];
                 }
@@ -254,20 +254,97 @@ class Database {
                 //Only add values that exist in the query
                 if (query.hasOwnProperty(c)) {
                     p.cols.push(c);
-                    p.values.push(query[c]);
+                    p.values.push(typeof query[c] === 'string' ? `'${query[c]}'` : query[c]);
                     return p;
                 } else {
                     return p;
                 }
-            }, { cols: [], values: [] });
+            }, { cols: [], values: [], ok: true });
         } else {
             //Return an error if the table is not ok
             return { ok: false, error: `table ${table} does not exist` }
         }
     }
 
-    buildSelectQuery(table, query, strict){
+    /**
+     * Takes in a table and a query and converts it to an SQL select 
+     * query. If strict mode is active, all entries must be included
+     * 
+     * @param {string} table 
+     * @param {object} query 
+     * @param {boolean} strict 
+     * @returns {object}
+     */
+    buildSelectQuery(table, query, strict) {
 
+        let trueTable = this.getTable(table);
+
+        //Get the type-checked query
+        let typedQuery = this.checkTypes(table, query);
+
+        //Strict mode forces the query to not miss any values
+        if (strict && !typedQuery.ok) {
+            return { ok: false, error: typedQuery.toString() }
+        }
+
+        //Get column names and their values
+        let result = this.layoutQueryValueArray(table, typedQuery.valid);
+        if (result.ok) {
+            let { cols, values } = result;
+
+            //Create the where clause
+            let where = [];
+            for (let i = 0; i < cols.length; i++) {
+                where.push(`${cols[i]}=$${i+1}`);
+            }
+            where = where.join(' AND ');
+
+            //Create the select statement
+            let select = `SELECT ${cols.join(', ')} FROM ${trueTable.name} WHERE ${where};`;
+
+            return { query: select, queryData: values, ok: true };
+        } else {
+            return { ok: false, error: result.error }
+        }
+    }
+
+    /**
+     * Takes in a table name and a query object and outputs a
+     * valid SQL insert query
+     * @param {string} table 
+     * @param {object} query
+     * @returns {object}
+     */
+    buildInsertQuery(table, query) {
+        //Get the actual table data
+        let trueTable = this.getTable(table);
+
+        //Get the type-checked query
+        let typedQuery = this.checkTypes(table, query);
+
+        //Insert is always strict
+        if (!typedQuery.ok) {
+            return { ok: false, error: typedQuery.toString() }
+        }
+
+        //Get column names and their values
+        let result = this.layoutQueryValueArray(table, typedQuery.valid);
+        if (result.ok) {
+            let { cols, values } = result;
+
+            //Create the where clause
+            let substitutes = [];
+            for (let i = 0; i < cols.length; i++) {
+                substitutes.push(`$${i+1}`);
+            }
+
+            //Create the select statement
+            let select = `INSERT INTO ${trueTable.name} (${cols.join(', ')}) VALUES (${substitutes.join(', ')});`;
+
+            return { query: select, queryData: values, ok: true };
+        } else {
+            return { ok: false, error: result.error }
+        }
     }
 
 }
