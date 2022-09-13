@@ -14,8 +14,8 @@ import manaSymbols from "./mana_symbols.json";
 function CardEntry(props) {
   const [state, setState] = React.useState({
     elevation: 4,
-    has: parseInt(props.cardData.has),
-    needs: parseInt(props.cardData.needs)
+    has: parseInt(props.cardData.has) || 0,
+    needs: parseInt(props.cardData.needs) || 0
   });
   const onMouseOver = () => setState({ ...state, elevation: 8 });
   const onMouseOut = () => setState({ ...state, elevation: 4 });
@@ -86,7 +86,7 @@ function CardEntry(props) {
 function CardList(props) {
   return (
     <Stack spacing={2}>
-      {props.cards.map((card, i) => {
+      {props.cards.sort((a, b) => ('' + a.name).localeCompare(b.name)).map((card, i) => {
         return <CardEntry cardData={card} key={i} />;
       })}
     </Stack>

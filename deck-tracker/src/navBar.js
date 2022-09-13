@@ -49,7 +49,7 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
   },
 }));
 
-export default function PrimarySearchAppBar() {
+export default function PrimarySearchAppBar(props) {
   return (
     <Box sx={{ flexGrow: 1 }}>
       <AppBar position="static">
@@ -62,7 +62,7 @@ export default function PrimarySearchAppBar() {
           >
             Deck Tracker
           </Typography>
-          <SearchBox>
+          <SearchBox onChange={(e) => props.setParentState(e.target.value)}>
             <SearchIconWrapper>
               <Search />
             </SearchIconWrapper>
