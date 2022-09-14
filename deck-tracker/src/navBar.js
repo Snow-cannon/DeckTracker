@@ -1,13 +1,13 @@
 import * as React from 'react';
 import { styled, alpha } from '@mui/material';
 import { AppBar } from '@mui/material';
-import { Box } from  '@mui/material';
-import { Toolbar }  from '@mui/material';
-import { IconButton } from '@mui/material';
+import { Box } from '@mui/material';
+import { Toolbar } from '@mui/material';
 import { Typography } from '@mui/material';
 import { InputBase } from '@mui/material';
-import { Menu } from '@mui/icons-material';
 import { Search } from '@mui/icons-material';
+import { Button } from '@mui/material'
+import { LoginPopup } from './loginPopup.js';
 
 const SearchBox = styled('div')(({ theme }) => ({
   position: 'relative',
@@ -50,6 +50,16 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
 }));
 
 export default function PrimarySearchAppBar(props) {
+  const [state, setState] = React.useState({
+    loginOpen: false,
+  });
+  const openLogin = () => {
+    setState({ ...state, loginOpen: true });
+  }
+  const closeLogin = (value) => {
+    setState({ ...state, loginOpen: false });
+  };
+
   return (
     <Box sx={{ flexGrow: 1 }}>
       <AppBar position="static">
@@ -72,19 +82,10 @@ export default function PrimarySearchAppBar(props) {
             />
           </SearchBox>
           <Box sx={{ flexGrow: 1 }} />
-          <Box sx={{ display: { xs: 'flex', md: 'none' } }}>
-          <IconButton
-            size="large"
-            edge="start"
-            color="inherit"
-            aria-label="open drawer"
-            sx={{ mr: 2 }}
-          >
-            <Menu />
-          </IconButton>
-          </Box>
+          <Button color="inherit" onClick={openLogin}>Login</Button>
         </Toolbar>
       </AppBar>
+      <LoginPopup open={state['loginOpen']} onClose={closeLogin}></LoginPopup>
     </Box>
   );
 }
