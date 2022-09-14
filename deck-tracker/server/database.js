@@ -40,13 +40,16 @@ class Database {
 
         // Create the pool.
         this.client = await this.pool.connect();
-
+        
         // Init the database.
         await this.init();
     }
 
     //Initialize the DB with tables and initialize the table objects
     async init() {
+        // console.log(this.client);
+
+        console.log(this.client.query);
 
         this.cardTable.types = {
             name: 'string',
@@ -55,7 +58,7 @@ class Database {
             cmc: 'number',
             rarity: 'string',
             default: 'boolean',
-            data: 'string'
+            data: 'object'
         };
         this.cardTable.cols = ['name', 'set', 'colors', 'cmc', 'rarity', 'default', 'data'];
         this.cardTable.name = 'Cards';
@@ -146,6 +149,8 @@ class Database {
         `;
 
         //Commented until DB exists
+        // const res = await this.client;
+        // console.log(res);
         // await this.client.query(cardTable);
         // await this.client.query(userTable);
         // await this.client.query(deckTable);
@@ -160,7 +165,13 @@ class Database {
         await this.pool.end();
     }
 
-    /** Query Making Scripts */
+    /**
+     * 
+     * 
+     * Query Making Scripts
+     * 
+     * 
+    */
 
     //Get the table from a string
     getTable(table) {
@@ -188,13 +199,22 @@ class Database {
      * @param {string} query
      */
     async addCard(query) {
-        let valid = this.checkTypes(db.CARDS, query);
-        if (valid.ok) {
-            let queryString = 'INSERT INTO Cards (name, set, colors, cmc, rarity, bulk) VALUES ($1, $2, $3, $4, $5, $6);';
+        let pureQueryData = this.buildQuery(this.INSERT, this.CARDS, query, true);
+        if (pureQueryData.ok) {
+            const res = await this.client.query(pureQueryData.query)
         } else {
-            return { ok: false, error: valid.toString() }
+            return pureQueryData
         }
+        return pureQueryData;
     }
+
+    /**
+     * 
+     * 
+     * BUILD QUERY STRINGS
+     * 
+     * 
+     */
 
     /**
      * Takes in a table object and compares the types to the input object.
@@ -375,7 +395,8 @@ class Database {
 
 }
 
+// console.log(process.env.DATABASE_URL);
+
 const db = new Database(process.env.DATABASE_URL);
-await db.init();
 
 export { db }
