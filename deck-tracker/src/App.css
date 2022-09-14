@@ -63,27 +63,65 @@
 .mtgCard{
   display: flex;
   height: 50px;
+  width: 100%;
   justify-content: center;
   align-items: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cardText{
+  width: 1fr;
+  overflow: hidden;
 }
 
 .parentFlexRight{
   height: 100%;
-  width: 55%;
+  width: 45%;
+  min-width: 200px;
   display: flex;
   margin-left: auto;
 }
 
 .manaIconContainer{
   height: 100%;
+  width: 50%;
+  min-width: 70px;
   display: flex;
   align-items: center;
   margin-right: auto;
+  flex-wrap: wrap;
 }
 
 .manaIcon{
-  width: auto;
+  width: auto ;
   display: flex;
-  height: 50%;
+  height: 30%;
   margin: 4px;
+}
+
+.actionButtons{
+  height: 100%;
+  min-width: 110px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+@media screen and (min-width: 775px) {
+  .manaIcon{
+    width: auto ;
+    display: flex;
+    height: 45%;
+    margin: 4px;
+  }
+  .manaIconContainer{
+    height: 100%;
+    width: 50%;
+    display: flex;
+    align-items: center;
+    margin-right: auto;
+    overflow: wrap;
+    flex-wrap: wrap;
+  }
 }
