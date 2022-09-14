@@ -19,26 +19,17 @@ class Database {
         this.collectionTable = this.emptyTable();
         this.deckContentTable = this.emptyTable();
         this.userTable = this.emptyTable();
-
-        //Constants for table searching
-        this.USERS = 'user';
-        this.DECKS = 'deck';
-        this.COLLECTION = 'collection';
-        this.CONTENT = 'content';
-        this.CARDS = 'card';
     }
 
-    //Get the table from a string
-    getTable(table) {
-        let tableObj = {
-            card: this.cardTable,
-            content: this.deckContentTable,
-            collection: this.collectionTable,
-            user: this.userTable,
-            deck: this.deckTable
-        }
-        return tableObj[table] || this.emptyTable();
-    }
+    get USERS() { return 'user'; }
+    get DECKS() { return 'deck'; }
+    get COLLECTION() { return 'collection'; }
+    get CONTENT() { return 'content'; }
+    get CARDS() { return 'card'; }
+    get INSERT() { return 'insert'; }
+    get SELECT() { return 'select'; }
+    get UPDATE() { return 'update'; }
+    get DELETE() { return 'delete'; }
 
     //Connect to the DB
     async connect() {
@@ -169,6 +160,28 @@ class Database {
         await this.pool.end();
     }
 
+    /** Query Making Scripts */
+
+    //Get the table from a string
+    getTable(table) {
+        let tableObj = {
+            card: this.cardTable,
+            content: this.deckContentTable,
+            collection: this.collectionTable,
+            user: this.userTable,
+            deck: this.deckTable
+        }
+        return tableObj[table] || this.emptyTable();
+    }
+
+    getQueryType(type) {
+        if ([this.DELETE, this.INSERT, this.SELECT, this.UPDATE].includes(type)) {
+            return { type: type, ok: true };
+        } else {
+            return { ok: false, error: 'Invalid type' }
+        }
+    }
+
     /**
      * Takes in a query object and adds the card to the database if possible
      * 
@@ -266,85 +279,98 @@ class Database {
         }
     }
 
-    /**
-     * Takes in a table and a query and converts it to an SQL select 
-     * query. If strict mode is active, all entries must be included
-     * 
-     * @param {string} table 
-     * @param {object} query 
-     * @param {boolean} strict 
-     * @returns {object}
-     */
-    buildSelectQuery(table, query, strict) {
-
+    purifyQuery(table, query, strict) {
         let trueTable = this.getTable(table);
-
-        //Get the type-checked query
+        if (!trueTable.ok) {
+            return { ok: false, error: 'Table does not exist' };
+        }
         let typedQuery = this.checkTypes(table, query);
-
-        //Strict mode forces the query to not miss any values
         if (strict && !typedQuery.ok) {
-            return { ok: false, error: typedQuery.toString() }
-        }
-
-        //Get column names and their values
-        let result = this.layoutQueryValueArray(table, typedQuery.valid);
-        if (result.ok) {
-            let { cols, values } = result;
-
-            //Create the where clause
-            let where = [];
-            for (let i = 0; i < cols.length; i++) {
-                where.push(`${cols[i]}=$${i+1}`);
+            return {
+                ok: false,
+                error: typedQuery.toString(),
+                missing: typedQuery.missing,
+                invalid: typedQuery.invalid
             }
-            where = where.join(' AND ');
-
-            //Create the select statement
-            let select = `SELECT ${cols.join(', ')} FROM ${trueTable.name} WHERE ${where};`;
-
-            return { query: select, queryData: values, ok: true };
-        } else {
-            return { ok: false, error: result.error }
         }
+        let data = this.layoutQueryValueArray(table, typedQuery.valid);
+        return {
+            cols: data.cols,
+            values: data.values,
+            name: trueTable.name,
+            missing: typedQuery.missing,
+            invalid: typedQuery.invalid,
+            ok: true
+        };
     }
 
     /**
-     * Takes in a table name and a query object and outputs a
-     * valid SQL insert query
+     * 
      * @param {string} table 
-     * @param {object} query
-     * @returns {object}
+     * @param {string} type 
+     * @param {object} query 
+     * @param {boolean} strict 
      */
-    buildInsertQuery(table, query) {
-        //Get the actual table data
-        let trueTable = this.getTable(table);
+    buildQuery(type, table, query, strict) {
+        //Get the query type
+        let trueType = this.getQueryType(type);
 
-        //Get the type-checked query
-        let typedQuery = this.checkTypes(table, query);
-
-        //Insert is always strict
-        if (!typedQuery.ok) {
-            return { ok: false, error: typedQuery.toString() }
+        if (!trueType.ok) {
+            return trueType;
         }
 
-        //Get column names and their values
-        let result = this.layoutQueryValueArray(table, typedQuery.valid);
-        if (result.ok) {
-            let { cols, values } = result;
+        //Get actual type
+        trueType = trueType.type;
 
-            //Create the where clause
-            let substitutes = [];
-            for (let i = 0; i < cols.length; i++) {
-                substitutes.push(`$${i+1}`);
-            }
-
-            //Create the select statement
-            let select = `INSERT INTO ${trueTable.name} (${cols.join(', ')}) VALUES (${substitutes.join(', ')});`;
-
-            return { query: select, queryData: values, ok: true };
-        } else {
-            return { ok: false, error: result.error }
+        //Check that the data is valid
+        let data = this.purifyQuery(table, query, (strict || type === this.INSERT));
+        if (!data.ok && (strict || type === this.INSERT)) {
+            return { ...data, strict: strict };
         }
+
+        //Get data values
+        let { cols, values, name } = data;
+
+        //Make extended clauses
+        let merged = [];
+        if (type === this.SELECT || type === this.DELETE || type === this.UPDATE) {
+            merged = cols.map((c, i) => { return `${c}=$${i + 1}`; });
+        } else if (type === this.INSERT) {
+            merged = cols.map((c, i) => { return `$${i + 1}`; });
+        }
+
+        //Create query string
+        let isOk = true;
+        let statement = '';
+        switch (type) {
+            case this.INSERT:
+                statement = `INSERT INTO ${name} (${cols.join(', ')}) VALUES (${merged.join(', ')});`;
+                break;
+            case this.SELECT:
+                statement = `SELECT ${cols.join(', ')} FROM ${name} WHERE ${merged.join(' AND ')};`;
+                break;
+            case this.UPDATE:
+                statement = `UPDATE ${name} SET ${merged.join(', ')};`;
+                break;
+            case this.DELETE:
+                statement = `DELETE FROM ${name} WHERE ${merged.join(' AND ')};`;
+                break;
+
+            //Query type check alreay happend but default is required
+            default:
+                isOk = false;
+                break;
+        }
+
+        //Return data
+        return {
+            query: statement,
+            queryData: values,
+            missing: data.missing,
+            invalid: data.invalid,
+            strict: strict,
+            ok: isOk
+        };
     }
 
 }
