@@ -1,5 +1,6 @@
 import express from 'express';
 import { db } from './database.js';
+import dbRoute from './db.route.js';
 
 //Create express application
 const app = express();
@@ -12,10 +13,7 @@ app.use('/', express.static('build'));
 
 await db.connect();
 
-app.post('/addCard', async (req, res) => {
-    let result = await db.addCard(req.body);
-    res.json(result);
-});
+app.use('/db', dbRoute);
 
 //Match invalid server requests
 app.all('*', async (request, response) => {
