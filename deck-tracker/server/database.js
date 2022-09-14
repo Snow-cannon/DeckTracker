@@ -53,10 +53,10 @@ class Database {
             colors: 'string',
             cmc: 'number',
             rarity: 'string',
-            defaultCard: 'boolean',
+            defaultcard: 'boolean',
             data: 'object'
         };
-        this.cardTable.cols = ['name', 'set', 'colors', 'cmc', 'rarity', 'defaultCard', 'data'];
+        this.cardTable.cols = ['name', 'set', 'colors', 'cmc', 'rarity', 'defaultcard', 'data'];
         this.cardTable.name = 'Cards';
         this.cardTable.ok = true;
 
@@ -113,7 +113,7 @@ class Database {
                 colors varchar(5),
                 cmc int,
                 rarity varchar(20),
-                defaultCard bool,
+                defaultcard bool,
                 data text
             );
         `;
@@ -425,8 +425,8 @@ class Database {
             case this.INSERT:
                 statement = `INSERT INTO ${name} (${cols.join(', ')}) VALUES (${merged.join(', ')}) RETURNING *;`;
                 break;
-            case this.SELECT:
-                statement = `SELECT ${cols.join(', ')} FROM ${name} WHERE ${merged.join(' AND ')};`;
+            case this.SELECT: //Select always returns all data points (for now)
+                statement = `SELECT * FROM ${name} WHERE ${merged.join(' AND ')};`;
                 break;
             case this.UPDATE:
                 statement = `UPDATE ${name} SET ${merged.join(', ')} RETURNING *;`;
