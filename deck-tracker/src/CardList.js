@@ -54,7 +54,7 @@ function CardEntry(props) {
               className="manaIcon"
               key={i}
             ></img>
-          );
+          )
         })}
         </div>
         <Typography sx={{ fontSize: "100%"}} color="text.primary" marginRight={5}>
