@@ -152,7 +152,7 @@ function App(props) {
           Clear Filters
         </Button>
       </Drawer>
-      <Box display="flex" justifyContent="center" minHeight="90vh" marginTop={'10%'} marginBottom={'10%'}>
+      <Box display="flex" justifyContent="center" minHeight="90vh" marginBottom={'10%'}>
         <CardList cards={cardState['cards']} />
       </Box>
     </div>

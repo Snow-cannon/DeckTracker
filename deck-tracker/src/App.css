@@ -40,7 +40,7 @@
 #bx{
   width:210px;
   height:80px;
-  position:absolute;
+  position:sticky;
   top:10%;
   left:0;
   overflow:hidden;
@@ -108,16 +108,16 @@
   align-items: center;
 }
 
-@media screen and (min-width: 775px) {
+@media screen and (min-width: 800px) {
   .manaIcon{
     width: auto ;
     display: flex;
-    height: 45%;
+    height: 55%;
     margin: 4px;
   }
   .manaIconContainer{
     height: 100%;
-    width: 50%;
+    width: 65%;
     display: flex;
     align-items: center;
     margin-right: auto;
