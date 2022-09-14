@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node server/server.js",
-    "build": "react-scripts build",
+    "start": "node server/index.js",
+    "self-build": "react-scripts build",
     "test": "react-scripts test",
     "deploy": "copyfiles package*.json deploy && copyfiles build/** deploy && copyfiles server/*.js deploy",
     "eject": "react-scripts eject",
