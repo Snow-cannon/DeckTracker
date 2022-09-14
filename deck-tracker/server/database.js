@@ -40,61 +40,37 @@ class Database {
 
         // Create the pool.
         this.client = await this.pool.connect();
-        
+
         // Init the database.
         await this.init();
     }
 
-    //Initialize the DB with tables and initialize the table objects
-    async init() {
-        // console.log(this.client);
-
-        console.log(this.client.query);
-
+    setTableData() {
+        //Card
         this.cardTable.types = {
             name: 'string',
             set: 'string',
             colors: 'string',
             cmc: 'number',
             rarity: 'string',
-            default: 'boolean',
+            defaultcard: 'boolean',
             data: 'object'
         };
-        this.cardTable.cols = ['name', 'set', 'colors', 'cmc', 'rarity', 'default', 'data'];
+        this.cardTable.cols = ['name', 'set', 'colors', 'cmc', 'rarity', 'defaultcard', 'data'];
         this.cardTable.name = 'Cards';
         this.cardTable.ok = true;
 
-        const cardTable = `
-            CREATE TABLE IF NOT EXISTS Cards (
-                name varchar(200) PRIMARY KEY,
-                set varchar(50),
-                colors varchar(5),
-                cmc int,
-                rarity varchar(20),
-                default boolean,
-                data text
-            );
-        `;
-
+        //Deck Contents
         this.deckContentTable.types = {
             did: 'string',
             name: 'string',
             needed: 'number'
         };
-        this.deckContentTable.cols = ['data', 'name', 'needed'];
+        this.deckContentTable.cols = ['did', 'name', 'needed'];
         this.deckContentTable.name = 'DeckContent';
         this.deckContentTable.ok = true;
 
-        const deckContentTable = `
-            CREATE TABLE IF NOT EXISTS DeckContent (
-                did uuid,
-                name varchar(200),
-                needed int,
-                FOREIGN KEY (name) REFERENCES Cards,
-                FOREIGN KEY (did) REFERENCES Decks
-            );
-        `;
-
+        //Decks
         this.deckTable.types = {
             did: 'string',
             name: 'string',
@@ -103,6 +79,55 @@ class Database {
         this.deckTable.cols = ['did', 'name', 'email'];
         this.deckTable.name = 'Decks';
         this.deckTable.ok = true;
+
+        //Users
+        this.userTable.types = {
+            email: 'string',
+            password: 'string',
+            username: 'string'
+        };
+        this.userTable.cols = ['email', 'password', 'username'];
+        this.userTable.name = 'Users';
+        this.userTable.ok = true;
+
+        //Collection
+        this.collectionTable.types = {
+            name: 'string',
+            email: 'string',
+            has: 'number'
+        };
+        this.collectionTable.cols = ['name', 'email', 'has']
+        this.collectionTable.name = 'Collection';
+        this.collectionTable.ok = true;
+    }
+
+    //Initialize the DB with tables and initialize the table objects
+    async init() {
+
+        this.setTableData();
+
+        const cardTable = `
+            CREATE TABLE IF NOT EXISTS Cards (
+                name varchar(200) PRIMARY KEY,
+                set varchar(50),
+                colors varchar(5),
+                cmc int,
+                rarity varchar(20),
+                defaultcard bool,
+                data text
+            );
+        `;
+
+        const deckContentTable = `
+            CREATE TABLE IF NOT EXISTS DeckContent (
+                did uuid,
+                name varchar(200),
+                needed int,
+                FOREIGN KEY (name) REFERENCES Cards,
+                FOREIGN KEY (did) REFERENCES Decks,
+                PRIMARY KEY (did, name)
+            );
+        `;
 
         const deckTable = `
             CREATE TABLE IF NOT EXISTS Decks (
@@ -113,49 +138,32 @@ class Database {
             );
         `;
 
-        this.userTable.types = {
-            email: 'string',
-            password: 'string',
-            username: 'string'
-        };
-        this.userTable.cols = ['email', 'password', 'username'];
-        this.userTable.name = 'Users';
-        this.userTable.ok = true;
-
         const userTable = `
             CREATE TABLE IF NOT EXISTS Users (
-                email varchar(320) PRIMARY KEY,
-                password varchar(50)
+                email varchar(320),
+                password varchar(50),
+                username varchar(50),
+                PRIMARY KEY (email)
             );
         `;
 
-        this.collectionTable.types = {
-            name: 'string',
-            email: 'string',
-            has: 'number'
-        };
-        this.collectionTable.cols = ['name', 'email', 'has']
-        this.collectionTable.name = 'Collection';
-        this.collectionTable.ok = true;
-
         const collectionTable = `
             CREATE TABLE IF NOT EXISTS Collection (
-                name varchar(200) PRIMARY KEY,
-                email varchar(320) PRIMARY KEY,
+                name varchar(200),
+                email varchar(320),
                 has int,
                 FOREIGN KEY (name) REFERENCES Cards,
-                FOREIGN KEY (uid) REFERENCES Users
+                FOREIGN KEY (email) REFERENCES Users,
+                PRIMARY KEY (name, email)
             );
         `;
 
         //Commented until DB exists
-        // const res = await this.client;
-        // console.log(res);
-        // await this.client.query(cardTable);
-        // await this.client.query(userTable);
-        // await this.client.query(deckTable);
-        // await this.client.query(collectionTable);
-        // await this.client.query(deckContentTable);
+        await this.client.query(cardTable);
+        await this.client.query(userTable);
+        await this.client.query(deckTable);
+        await this.client.query(collectionTable);
+        await this.client.query(deckContentTable);
 
     }
 
@@ -194,18 +202,69 @@ class Database {
     }
 
     /**
+     * 
+     * 
+     * Standard Query Functions
+     * 
+     */
+
+    /**
      * Takes in a query object and adds the card to the database if possible
      * 
-     * @param {string} query
+     * @param {object} query
      */
-    async addCard(query) {
-        let pureQueryData = this.buildQuery(this.INSERT, this.CARDS, query, true);
+    async createCard(query) {
+        return this.runQuery(this.INSERT, this.CARDS, query, true);
+    }
+
+    /**
+     * Takes in a query object and adds the card to the database if possible
+     * 
+     * @param {object} query
+     */
+    async selectCard(query) {
+        return this.runQuery(this.SELECT, this.CARDS, query, false);
+    }
+
+    /**
+     * Takes in a query object and adds the card to the database if possible
+     * 
+     * @param {object} query
+     */
+    async updateCard(query) {
+        return this.runQuery(this.UPDATE, this.CARDS, query, false);
+    }
+
+    /**
+     * Takes in a query object and adds the card to the database if possible
+     * 
+     * @param {object} query
+     */
+    async deleteCard(query) {
+        return this.runQuery(this.DELETE, this.CARDS, query, false);
+    }
+
+    /**
+     * Takes in a type, table, query obj and strifct bool and returns the result of
+     * running the query on the db.
+     * 
+     * @param {string} type
+     * @param {string} table
+     * @param {object} query
+     * @param {boolean} strict
+     */
+    async runQuery(type, table, query, strict) {
+        let pureQueryData = this.buildQuery(type, table, query, strict);
         if (pureQueryData.ok) {
-            const res = await this.client.query(pureQueryData.query)
+            try {
+                const res = await this.client.query(pureQueryData.query, pureQueryData.queryData);
+                return { ok: true, rows: res.rows };
+            } catch (e) {
+                return { ok: false, error: e };
+            }
         } else {
-            return pureQueryData
+            return pureQueryData;
         }
-        return pureQueryData;
     }
 
     /**
@@ -287,7 +346,7 @@ class Database {
                 //Only add values that exist in the query
                 if (query.hasOwnProperty(c)) {
                     p.cols.push(c);
-                    p.values.push(typeof query[c] === 'string' ? `'${query[c]}'` : query[c]);
+                    p.values.push(typeof query[c] === 'string' ? `${query[c]}` : query[c]);
                     return p;
                 } else {
                     return p;
@@ -364,16 +423,16 @@ class Database {
         let statement = '';
         switch (type) {
             case this.INSERT:
-                statement = `INSERT INTO ${name} (${cols.join(', ')}) VALUES (${merged.join(', ')});`;
+                statement = `INSERT INTO ${name} (${cols.join(', ')}) VALUES (${merged.join(', ')}) RETURNING *;`;
                 break;
-            case this.SELECT:
-                statement = `SELECT ${cols.join(', ')} FROM ${name} WHERE ${merged.join(' AND ')};`;
+            case this.SELECT: //Select always returns all data points (for now)
+                statement = `SELECT * FROM ${name} WHERE ${merged.join(' AND ')};`;
                 break;
             case this.UPDATE:
-                statement = `UPDATE ${name} SET ${merged.join(', ')};`;
+                statement = `UPDATE ${name} SET ${merged.join(', ')} RETURNING *;`;
                 break;
             case this.DELETE:
-                statement = `DELETE FROM ${name} WHERE ${merged.join(' AND ')};`;
+                statement = `DELETE FROM ${name} WHERE ${merged.join(' AND ')} RETURNING *;`;
                 break;
 
             //Query type check alreay happend but default is required
@@ -394,8 +453,6 @@ class Database {
     }
 
 }
-
-// console.log(process.env.DATABASE_URL);
 
 const db = new Database(process.env.DATABASE_URL);
 
