@@ -1,4 +1,5 @@
 import express from 'express';
+import { db } from './database.js';
 
 //Create express application
 const app = express();
@@ -8,6 +9,13 @@ app.use(express.json());
 
 //Statically serve client files
 app.use('/', express.static('build'));
+
+await db.connect();
+
+app.post('/addCard', async (req, res) => {
+    let result = await db.addCard(req.body);
+    res.json(result);
+});
 
 //Match invalid server requests
 app.all('*', async (request, response) => {

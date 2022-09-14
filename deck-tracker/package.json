@@ -10,7 +10,8 @@
     "test": "react-scripts test",
     "deploy": "copyfiles package*.json deploy && copyfiles build/** deploy && copyfiles server/*.js deploy",
     "eject": "react-scripts eject",
-    "deploy-in": "cd .. && npm run deploy && cd deploy"
+    "deploy-in": "cd .. && npm run deploy && cd deploy",
+    "deploy-start": "npm run deploy-in && npm start"
   },
   "dependencies": {
     "@emotion/react": "^11.10.4",
