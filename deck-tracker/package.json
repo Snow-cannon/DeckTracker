@@ -8,7 +8,7 @@
     "live-start": "react-scripts start",
     "self-build": "react-scripts build",
     "test": "react-scripts test",
-    "deploy": "copyfiles package*.json deploy && copyfiles build/** deploy && copyfiles server/*.js deploy",
+    "deploy": "copyfiles package*.json deploy && copyfiles build/** deploy && copyfiles server/*.* deploy",
     "eject": "react-scripts eject",
     "deploy-in": "cd .. && npm run deploy && cd deploy",
     "deploy-start": "npm run deploy-in && npm start"
@@ -27,6 +27,7 @@
     "express-jwt": "^7.7.5",
     "express-session": "^1.17.3",
     "jsonwebtoken": "^8.5.1",
+    "fs": "^0.0.1-security",
     "morgan": "^1.10.0",
     "passport": "^0.6.0",
     "passport-local": "^1.0.0",
