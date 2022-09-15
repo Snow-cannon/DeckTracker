@@ -9,9 +9,8 @@ CREATE TABLE IF NOT EXISTS Cards (
 );
 
 CREATE TABLE IF NOT EXISTS Users (
-    email varchar(320),
-    password varchar(50),
-    username varchar(50),
+    email varchar(320) NOT NULL,
+    password varchar(450) NOT NULL,
     PRIMARY KEY (email)
 );
 

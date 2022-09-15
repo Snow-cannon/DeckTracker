@@ -90,7 +90,6 @@ class Database {
         this.userTable.setTypes({
             email: 'string',
             password: 'string',
-            username: 'string'
         });
 
         this.collectionTable.setTypes({

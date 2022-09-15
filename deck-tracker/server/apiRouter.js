@@ -56,16 +56,16 @@ function validateUser(token) {
         const tokenDecodedData = verify(token, SUPER_SECRET);
         if (tokenDecodedData === undefined) {
             return ({
-                error: true,
+                ok: false,
             });
         }
         return ({
-            error: false,
+            ok: true,
             data: tokenDecodedData
         });
     } catch (error) {
         return ({
-            error: true,
+            ok: false,
             //data: error
         });
     }
@@ -97,11 +97,77 @@ app.post('/login/passwd', async (req, res) => {
         console.log(user.uid);
         const signedJWT = sign({ user: user.uid }, SUPER_SECRET, { expiresIn: '1 day' });
         res.cookie('auth', signedJWT, { maxAge: 43200000 });
-        res.redirect("/personalProfile.html");
+        res.status(200).send();
     }
     else {
         res.status(401).send('Password not validated');
     }
+});
+
+app.put('/importDeck', async (req, res) => {
+    // authenticate & authorize via JWT
+    const authInfo = validateUser(req.cookies["auth"]);
+
+    // If we are not validated, return a 401 error
+    if (!authInfo.ok) {
+        // unauthenticated
+        return res.status(401).send();
+    }
+
+    const body = req.body;
+    let dbResponse = await db.importDeck(authInfo.data.user, body.deckContent, body.deckName); //TODO: Database function to import deck object and assign cards to user
+    if (!dbResponse.ok) {
+        return res.status(422).send({ error: dbResponse.error, data: dbResponse.rows });
+    }
+    res.status(201).send();
+});
+
+app.get('/userLibrary', async (req, res) => {
+    // authenticate & authorize via JWT
+    const authInfo = validateUser(req.cookies["auth"]);
+
+    // If we are not validated, return a 401 error
+    if (!authInfo.ok) {
+        // unauthenticated
+        return res.status(401).send();
+    }
+    const dbResponse = await db.getUserLibrary(authInfo.data.user); //TODO: Database function to get all decks for requesting user
+    if (!dbResponse.ok) {
+        return res.status(400).send({ error: dbResponse.error, data: dbResponse.rows });
+    }
+    res.status(201).send(dbResponse.rows);
+});
+
+app.patch('/updateHas', async (req, res) => {
+    // authenticate & authorize via JWT
+    const authInfo = validateUser(req.cookies["auth"]);
+
+    // If we are not validated, return a 401 error
+    if (!authInfo.ok) {
+        // unauthenticated
+        return res.status(401).send();
+    }
+    const dbResponse = await db.getUserLibrary(authInfo.data.user, req.body.cardName, req.body.totalAmount); //TODO: Database function to update collection data
+    if (!dbResponse.ok) {
+        return res.status(400).send({ error: dbResponse.error, data: dbResponse.rows });
+    }
+    res.status(201).send(dbResponse.rows);
+});
+
+app.delete('/deleteDeck', async (req, res) => {
+    // authenticate & authorize via JWT
+    const authInfo = validateUser(req.cookies["auth"]);
+
+    // If we are not validated, return a 401 error
+    if (!authInfo.ok) {
+        // unauthenticated
+        return res.status(401).send();
+    }
+    const dbResponse = await db.deleteDeck(authInfo.data.user, req.body.deckID); //TODO: Database function to delete based on deckID VALIDATE THE USER IS THE RIGHT ONE
+    if (!dbResponse.ok) {
+        return res.status(400).send({ error: dbResponse.error, data: dbResponse.rows });
+    }
+    res.status(202).send(dbResponse.rows);
 });
 
 export default apiRoute;
