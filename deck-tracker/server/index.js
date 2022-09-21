@@ -1,9 +1,9 @@
 import express from 'express';
 import { db } from './database.js';
-import dbRoute from './db.route.js';
 import apiRoute from './apiRouter.js';
-import jwt from 'express-jwt';
+import { expressjwt as jwt } from "express-jwt";
 import cookieParser from 'cookie-parser';
+import { SUPER_SECRET } from './apiRouter.js';
 
 //Create express application
 const app = express();
@@ -18,7 +18,6 @@ app.use('/', express.static('build'));
 
 await db.connect();
 
-app.use('/db', dbRoute);
 app.use('/api', apiRoute);
 
 app.use(jwt({

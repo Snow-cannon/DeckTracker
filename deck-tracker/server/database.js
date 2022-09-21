@@ -89,7 +89,7 @@ class Database {
 
         this.userTable.setTypes({
             email: 'string',
-            password: 'string',
+            password: 'string'
         });
 
         this.collectionTable.setTypes({
@@ -143,67 +143,22 @@ class Database {
 
     /**
      * 
-     * 
-     * Standard Query Functions
+     * Specific Query Functions
      * 
      */
 
-    /**
-     * Takes in a query object and adds the card to the database if possible
-     * 
-     * @param {object} query
-     */
-    async createCard(query) {
-        return this.runQuery(this.INSERT, this.CARDS, query, true);
-    }
-
-    /**
-     * Takes in a query object and adds the card to the database if possible
-     * 
-     * @param {object} query
-     */
-    async selectCard(query) {
-        return this.runQuery(this.SELECT, this.CARDS, query, false);
-    }
-
-    /**
-     * Takes in a query object and adds the card to the database if possible
-     * 
-     * @param {object} query
-     */
-    async updateCard(query) {
-        return this.runQuery(this.UPDATE, this.CARDS, query, false);
-    }
-
-    /**
-     * Takes in a query object and adds the card to the database if possible
-     * 
-     * @param {object} query
-     */
-    async deleteCard(query) {
-        return this.runQuery(this.DELETE, this.CARDS, query, false);
-    }
-
-    /**
-     * Takes in a type, table, query obj and strifct bool and returns the result of
-     * running the query on the db.
-     * 
-     * @param {string} type
-     * @param {string} table
-     * @param {object} query
-     * @param {boolean} strict
-     */
-    async runQuery(type, table, query, strict) {
-        let pureQueryData = this.buildQuery(type, table, query, strict);
-        if (pureQueryData.ok) {
+    async createNewUser(email, pass) {
+        let query = this.purifyQuery(this.USERS, { email: email, password: pass });
+        if (query.ok) {
+            let queryString = `INSERT INTO Users (email, password) VALUES ($1, $2) Returning *;`;
             try {
-                const res = await this.client.query(pureQueryData.query, pureQueryData.queryData);
+                const res = await this.client.query(queryString, query.values);
                 return { ok: true, rows: res.rows };
             } catch (e) {
                 return { ok: false, error: e };
             }
         } else {
-            return pureQueryData;
+            return { ok: false, error: 'Query not ok' };
         }
     }
 
@@ -320,75 +275,6 @@ class Database {
             missing: typedQuery.missing,
             invalid: typedQuery.invalid,
             ok: true
-        };
-    }
-
-    /**
-     * 
-     * @param {string} table 
-     * @param {string} type 
-     * @param {object} query 
-     * @param {boolean} strict 
-     */
-    buildQuery(type, table, query, strict) {
-        //Get the query type
-        let trueType = this.getQueryType(type);
-
-        if (!trueType.ok) {
-            return trueType;
-        }
-
-        //Get actual type
-        trueType = trueType.type;
-
-        //Check that the data is valid
-        let data = this.purifyQuery(table, query, (strict || type === this.INSERT));
-        if (!data.ok && (strict || type === this.INSERT)) {
-            return { ...data, strict: strict };
-        }
-
-        //Get data values
-        let { cols, values, name } = data;
-
-        //Make extended clauses
-        let merged = [];
-        if (type === this.SELECT || type === this.DELETE || type === this.UPDATE) {
-            merged = cols.map((c, i) => { return `${c}=$${i + 1}`; });
-        } else if (type === this.INSERT) {
-            merged = cols.map((c, i) => { return `$${i + 1}`; });
-        }
-
-        //Create query string
-        let isOk = true;
-        let statement = '';
-        switch (type) {
-            case this.INSERT:
-                statement = `INSERT INTO ${name} (${cols.join(', ')}) VALUES (${merged.join(', ')}) RETURNING *;`;
-                break;
-            case this.SELECT: //Select always returns all data points (for now)
-                statement = `SELECT * FROM ${name} WHERE ${merged.join(' AND ')};`;
-                break;
-            case this.UPDATE:
-                statement = `UPDATE ${name} SET ${merged.join(', ')} RETURNING *;`;
-                break;
-            case this.DELETE:
-                statement = `DELETE FROM ${name} WHERE ${merged.join(' AND ')} RETURNING *;`;
-                break;
-
-            //Query type check alreay happend but default is required
-            default:
-                isOk = false;
-                break;
-        }
-
-        //Return data
-        return {
-            query: statement,
-            queryData: values,
-            missing: data.missing,
-            invalid: data.invalid,
-            strict: strict,
-            ok: isOk
         };
     }
 
