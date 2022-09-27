@@ -20,8 +20,8 @@ function CardEntry(props) {
   const onMouseOver = () => setState({ ...state, elevation: 8 });
   const onMouseOut = () => setState({ ...state, elevation: 4 });
 
-  const onAddition = () => setState({ ...state, has: state['has']+1 });
-  const onSubtraction = () => setState({ ...state, has: state['has']-1 });
+  const onAddition = () => setState({ ...state, has: state['has'] + 1 });
+  const onSubtraction = () => setState({ ...state, has: state['has'] - 1 });
 
   let uncoloredPip = [];
   if (!props.cardData.colors.length) {
@@ -32,52 +32,53 @@ function CardEntry(props) {
 
   return (
     <Card
-      sx={{ minWidth: 650, maxWidth: 800 }}
       elevation={state["elevation"]}
       onMouseOver={onMouseOver}
       onMouseOut={onMouseOut}
       className="mtgCard"
     >
-      <CardContent>
-        <Typography sx={{ fontSize: "100%" }} color="text.primary">
+      <CardContent  className={'cardText'}>
+        <Typography noWrap sx={{ fontSize: "100%" }} color="text.primary">
           {props.cardData.name}
         </Typography>
       </CardContent>
       <CardActions className={"parentFlexRight"}>
         <div className="manaIconContainer">
-        {uncoloredPip}
-        {props.cardData.colors.map((c, i) => {
-          return (
-            <img
-              src={manaSymbols[c]}
-              alt="Color-symbol"
-              className="manaIcon"
-              key={i}
-            ></img>
-          )
-        })}
+          {uncoloredPip}
+          {props.cardData.colors.map((c, i) => {
+            return (
+              <img
+                src={manaSymbols[c]}
+                alt="Color-symbol"
+                className="manaIcon"
+                key={i}
+              ></img>
+            )
+          })}
         </div>
-        <Typography sx={{ fontSize: "100%"}} color="text.primary" marginRight={5}>
-          {state['has']}/{state['needs']}
-        </Typography>
-        <Fab
-          size="small"
-          color="primary"
-          aria-label="remove"
-          className="card-action-btn"
-          onClick={onSubtraction}
-        >
-          <Remove />
-        </Fab>
-        <Fab
-          size="small"
-          color="primary"
-          aria-label="add"
-          className="card-action-btn"
-          onClick={onAddition}
-        >
-          <Add />
-        </Fab>
+        <div className="actionButtons">
+          <Typography sx={{ fontSize: "100%" }} color="text.primary" marginRight={'8px'}>
+            {state['has']}/{state['needs']}
+          </Typography>
+          <Fab
+            size="small"
+            color="primary"
+            aria-label="remove"
+            className="card-action-btn"
+            onClick={onSubtraction}
+          >
+            <Remove />
+          </Fab>
+          <Fab
+            size="small"
+            color="primary"
+            aria-label="add"
+            className="card-action-btn"
+            onClick={onAddition}
+          >
+            <Add />
+          </Fab>
+        </div>
       </CardActions>
     </Card>
   );
@@ -85,7 +86,7 @@ function CardEntry(props) {
 
 function CardList(props) {
   return (
-    <Stack spacing={2}>
+    <Stack spacing={2} sx={{ minWidth: 200, maxWidth: 800 }} width={'90%'}>
       {props.cards.sort((a, b) => ('' + a.name).localeCompare(b.name)).map((card, i) => {
         return <CardEntry cardData={card} key={i} />;
       })}

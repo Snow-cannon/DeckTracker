@@ -1,6 +1,7 @@
 //Import dotenv for database connections
 import 'dotenv/config';
 import pg from 'pg';
+import { _read } from './fileIO.js';
 
 const { Pool } = pg;
 
@@ -10,35 +11,42 @@ class Database {
         //URL for connecting to the DB
         this.dburl = dburl;
 
-        //Definition of an empty table
-        this.emptyTable = () => { return { types: {}, cols: [], name: '', ok: false } };
+        class SQLTable {
+            constructor(name) {
+                this.name = name;
+                this.types = {};
+                this.cols = [];
+                this.ok = false;
+            }
+
+            setTypes(types) {
+                this.types = types || {};
+                this.cols = Object.keys(this.types);
+                this.ok = true;
+            }
+
+        }
 
         //Initialize all tables as invalid empty tables
-        this.deckTable = this.emptyTable();
-        this.cardTable = this.emptyTable();
-        this.collectionTable = this.emptyTable();
-        this.deckContentTable = this.emptyTable();
-        this.userTable = this.emptyTable();
+        this.deckTable = new SQLTable('Decks');
+        this.cardTable = new SQLTable('Cards');
+        this.collectionTable = new SQLTable('Collections');
+        this.deckContentTable = new SQLTable('DeckContent');
+        this.userTable = new SQLTable('Users');
+        this.dudTable = new SQLTable('');
 
-        //Constants for table searching
-        this.USERS = 'user';
-        this.DECKS = 'deck';
-        this.COLLECTION = 'collection';
-        this.CONTENT = 'content';
-        this.CARDS = 'card';
     }
 
-    //Get the table from a string
-    getTable(table) {
-        let tableObj = {
-            card: this.cardTable,
-            content: this.deckContentTable,
-            collection: this.collectionTable,
-            user: this.userTable,
-            deck: this.deckTable
-        }
-        return tableObj[table] || this.emptyTable();
-    }
+    //For table references
+    get USERS() { return 'user'; }
+    get DECKS() { return 'deck'; }
+    get COLLECTION() { return 'collection'; }
+    get CONTENT() { return 'content'; }
+    get CARDS() { return 'card'; }
+    get INSERT() { return 'insert'; }
+    get SELECT() { return 'select'; }
+    get UPDATE() { return 'update'; }
+    get DELETE() { return 'delete'; }
 
     //Connect to the DB
     async connect() {
@@ -54,113 +62,49 @@ class Database {
         await this.init();
     }
 
-    //Initialize the DB with tables and initialize the table objects
-    async init() {
+    setTableData() {
 
-        this.cardTable.types = {
-            name: 'string',
-            set: 'string',
+        this.cardTable.setTypes({
+            cardname: 'string',
+            setname: 'string',
             colors: 'string',
             cmc: 'number',
             rarity: 'string',
-            default: 'boolean',
-            data: 'string'
-        };
-        this.cardTable.cols = ['name', 'set', 'colors', 'cmc', 'rarity', 'default', 'data'];
-        this.cardTable.name = 'Cards';
-        this.cardTable.ok = true;
+            defaultcard: 'boolean',
+            bulk: 'object'
+        });
 
-        const cardTable = `
-            CREATE TABLE IF NOT EXISTS Cards (
-                name varchar(200) PRIMARY KEY,
-                set varchar(50),
-                colors varchar(5),
-                cmc int,
-                rarity varchar(20),
-                default boolean,
-                data text
-            );
-        `;
-
-        this.deckContentTable.types = {
+        this.deckContentTable.setTypes({
             did: 'string',
-            name: 'string',
+            cardname: 'string',
             needed: 'number'
-        };
-        this.deckContentTable.cols = ['data', 'name', 'needed'];
-        this.deckContentTable.name = 'DeckContent';
-        this.deckContentTable.ok = true;
+        });
 
-        const deckContentTable = `
-            CREATE TABLE IF NOT EXISTS DeckContent (
-                did uuid,
-                name varchar(200),
-                needed int,
-                FOREIGN KEY (name) REFERENCES Cards,
-                FOREIGN KEY (did) REFERENCES Decks
-            );
-        `;
-
-        this.deckTable.types = {
+        //Decks
+        this.deckTable.setTypes({
             did: 'string',
-            name: 'string',
+            deckname: 'string',
             email: 'string'
-        };
-        this.deckTable.cols = ['did', 'name', 'email'];
-        this.deckTable.name = 'Decks';
-        this.deckTable.ok = true;
+        });
 
-        const deckTable = `
-            CREATE TABLE IF NOT EXISTS Decks (
-                did uuid PRIMARY KEY,
-                name varchar(100),
-                email varchar(320),
-                FOREIGN KEY (email) REFERENCES Users
-            );
-        `;
-
-        this.userTable.types = {
+        this.userTable.setTypes({
             email: 'string',
-            password: 'string',
-            username: 'string'
-        };
-        this.userTable.cols = ['email', 'password', 'username'];
-        this.userTable.name = 'Users';
-        this.userTable.ok = true;
+            password: 'string'
+        });
 
-        const userTable = `
-            CREATE TABLE IF NOT EXISTS Users (
-                email varchar(320) PRIMARY KEY,
-                password varchar(50)
-            );
-        `;
-
-        this.collectionTable.types = {
-            name: 'string',
+        this.collectionTable.setTypes({
+            cardname: 'string',
             email: 'string',
             has: 'number'
-        };
-        this.collectionTable.cols = ['name', 'email', 'has']
-        this.collectionTable.name = 'Collection';
-        this.collectionTable.ok = true;
+        });
 
-        const collectionTable = `
-            CREATE TABLE IF NOT EXISTS Collection (
-                name varchar(200) PRIMARY KEY,
-                email varchar(320) PRIMARY KEY,
-                has int,
-                FOREIGN KEY (name) REFERENCES Cards,
-                FOREIGN KEY (uid) REFERENCES Users
-            );
-        `;
+    }
 
-        //Commented until DB exists
-        // await this.client.query(cardTable);
-        // await this.client.query(userTable);
-        // await this.client.query(deckTable);
-        // await this.client.query(collectionTable);
-        // await this.client.query(deckContentTable);
-
+    //Initialize the DB with tables and initialize the table objects
+    async init() {
+        this.setTableData();
+        let sql = await _read('server/initdb.sql');
+        await this.client.query(sql);
     }
 
     // Close the pool.
@@ -170,18 +114,61 @@ class Database {
     }
 
     /**
-     * Takes in a query object and adds the card to the database if possible
      * 
-     * @param {string} query
-     */
-    async addCard(query) {
-        let valid = this.checkTypes(db.CARDS, query);
-        if (valid.ok) {
-            let queryString = 'INSERT INTO Cards (name, set, colors, cmc, rarity, bulk) VALUES ($1, $2, $3, $4, $5, $6);';
+     * 
+     * Query Making Scripts
+     * 
+     * 
+    */
+
+    //Get the table from a string
+    getTable(table) {
+        let tableObj = {
+            card: this.cardTable,
+            content: this.deckContentTable,
+            collection: this.collectionTable,
+            user: this.userTable,
+            deck: this.deckTable
+        }
+        return tableObj[table] || this.dudTable;
+    }
+
+    getQueryType(type) {
+        if ([this.DELETE, this.INSERT, this.SELECT, this.UPDATE].includes(type)) {
+            return { type: type, ok: true };
         } else {
-            return { ok: false, error: valid.toString() }
+            return { ok: false, error: 'Invalid type' }
         }
     }
+
+    /**
+     * 
+     * Specific Query Functions
+     * 
+     */
+
+    async createNewUser(email, pass) {
+        let query = this.purifyQuery(this.USERS, { email: email, password: pass });
+        if (query.ok) {
+            let queryString = `INSERT INTO Users (email, password) VALUES ($1, $2) Returning *;`;
+            try {
+                const res = await this.client.query(queryString, query.values);
+                return { ok: true, rows: res.rows };
+            } catch (e) {
+                return { ok: false, error: e };
+            }
+        } else {
+            return { ok: false, error: 'Query not ok' };
+        }
+    }
+
+    /**
+     * 
+     * 
+     * BUILD QUERY STRINGS
+     * 
+     * 
+     */
 
     /**
      * Takes in a table object and compares the types to the input object.
@@ -254,7 +241,7 @@ class Database {
                 //Only add values that exist in the query
                 if (query.hasOwnProperty(c)) {
                     p.cols.push(c);
-                    p.values.push(typeof query[c] === 'string' ? `'${query[c]}'` : query[c]);
+                    p.values.push(typeof query[c] === 'string' ? `${query[c]}` : query[c]);
                     return p;
                 } else {
                     return p;
@@ -266,90 +253,33 @@ class Database {
         }
     }
 
-    /**
-     * Takes in a table and a query and converts it to an SQL select 
-     * query. If strict mode is active, all entries must be included
-     * 
-     * @param {string} table 
-     * @param {object} query 
-     * @param {boolean} strict 
-     * @returns {object}
-     */
-    buildSelectQuery(table, query, strict) {
-
+    purifyQuery(table, query, strict) {
         let trueTable = this.getTable(table);
-
-        //Get the type-checked query
+        if (!trueTable.ok) {
+            return { ok: false, error: 'Table does not exist' };
+        }
         let typedQuery = this.checkTypes(table, query);
-
-        //Strict mode forces the query to not miss any values
         if (strict && !typedQuery.ok) {
-            return { ok: false, error: typedQuery.toString() }
-        }
-
-        //Get column names and their values
-        let result = this.layoutQueryValueArray(table, typedQuery.valid);
-        if (result.ok) {
-            let { cols, values } = result;
-
-            //Create the where clause
-            let where = [];
-            for (let i = 0; i < cols.length; i++) {
-                where.push(`${cols[i]}=$${i+1}`);
+            return {
+                ok: false,
+                error: typedQuery.toString(),
+                missing: typedQuery.missing,
+                invalid: typedQuery.invalid
             }
-            where = where.join(' AND ');
-
-            //Create the select statement
-            let select = `SELECT ${cols.join(', ')} FROM ${trueTable.name} WHERE ${where};`;
-
-            return { query: select, queryData: values, ok: true };
-        } else {
-            return { ok: false, error: result.error }
         }
-    }
-
-    /**
-     * Takes in a table name and a query object and outputs a
-     * valid SQL insert query
-     * @param {string} table 
-     * @param {object} query
-     * @returns {object}
-     */
-    buildInsertQuery(table, query) {
-        //Get the actual table data
-        let trueTable = this.getTable(table);
-
-        //Get the type-checked query
-        let typedQuery = this.checkTypes(table, query);
-
-        //Insert is always strict
-        if (!typedQuery.ok) {
-            return { ok: false, error: typedQuery.toString() }
-        }
-
-        //Get column names and their values
-        let result = this.layoutQueryValueArray(table, typedQuery.valid);
-        if (result.ok) {
-            let { cols, values } = result;
-
-            //Create the where clause
-            let substitutes = [];
-            for (let i = 0; i < cols.length; i++) {
-                substitutes.push(`$${i+1}`);
-            }
-
-            //Create the select statement
-            let select = `INSERT INTO ${trueTable.name} (${cols.join(', ')}) VALUES (${substitutes.join(', ')});`;
-
-            return { query: select, queryData: values, ok: true };
-        } else {
-            return { ok: false, error: result.error }
-        }
+        let data = this.layoutQueryValueArray(table, typedQuery.valid);
+        return {
+            cols: data.cols,
+            values: data.values,
+            name: trueTable.name,
+            missing: typedQuery.missing,
+            invalid: typedQuery.invalid,
+            ok: true
+        };
     }
 
 }
 
 const db = new Database(process.env.DATABASE_URL);
-await db.init();
 
 export { db }
