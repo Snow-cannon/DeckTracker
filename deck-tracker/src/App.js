@@ -21,8 +21,6 @@ let cards = [];
 for (const card in sampleCards) {
   cards.push({ name: card, ...sampleCards[card] })
 }
-cards.push({ name: "A", colors: ["W", "U", "B", "R", "G"] })
-
 function App(props) {
   const [state, setState] = React.useState({
     drawerOpen: false,
@@ -153,7 +151,7 @@ function App(props) {
         </Button>
       </Drawer>
       <Box display="flex" justifyContent="center" minHeight="90vh" marginTop={'10%'} marginBottom={'10%'}>
-        <CardList cards={cardState['cards']} />
+        <CardList cards={cardState['cards']} filters={cardState['filters']} />
       </Box>
     </div>
 
