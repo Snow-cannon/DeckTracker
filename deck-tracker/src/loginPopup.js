@@ -7,6 +7,16 @@ import { DialogContent } from '@mui/material';
 import { DialogActions } from '@mui/material';
 
 export function LoginPopup(props) {
+  async function handleLogin(email, password){
+    let res = await fetch('/api/login/passwd', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({'email': email, 'password': password})});
+    if(res.status === 200){
+      props.setUserState(email)
+      props.onClose();
+    }
+    else{
+      window.alert('User login failed to login');
+    }
+  }
     return (
         <div>
       <Dialog open={props.open} onClose={props.onClose}>
@@ -15,7 +25,7 @@ export function LoginPopup(props) {
           <TextField
             autoFocus
             margin="dense"
-            id="name"
+            id="email"
             label="Email Address"
             type="email"
             fullWidth
@@ -24,7 +34,7 @@ export function LoginPopup(props) {
           <TextField
             autoFocus
             margin="dense"
-            id="name"
+            id="password"
             label="Password"
             type="password"
             fullWidth
@@ -32,7 +42,7 @@ export function LoginPopup(props) {
           />
         </DialogContent>
         <DialogActions style={{justifyContent: 'center'}}>
-          <Button variant='contained' onClick={props.onClose}>Login</Button>
+          <Button variant='contained' onClick={(e) => handleLogin(document.getElementById('email').value, document.getElementById('password').value)}>Login</Button>
         </DialogActions>
       </Dialog>
     </div>
