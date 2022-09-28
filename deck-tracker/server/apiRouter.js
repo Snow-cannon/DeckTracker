@@ -1,10 +1,9 @@
 import express from 'express';
 import jwtSigner from 'jsonwebtoken';
-const { sign, verify } = jwtSigner;
 import cookieParser from 'cookie-parser';
 import { db } from './database.js';
 import * as crypto from 'crypto';
-// import { db } from './database.js'
+const { sign, verify } = jwtSigner;
 
 const apiRoute = express.Router();
 
@@ -36,21 +35,6 @@ async function verifyPass(password, hash) {
     })
 }
 
-// LOGIN
-apiRoute.post('/login/passwd', async (req, res) => {
-    const options = req.body;
-    let user = await db.getUserFromEmail(options.email);
-    if (user != undefined && await verifyPass(options.password, user.password)) {
-        console.log(user.uid);
-        const signedJWT = sign({ user: user.uid }, SUPER_SECRET, { expiresIn: '1 day' });
-        res.cookie('auth', signedJWT, { maxAge: 43200000 });
-        res.redirect("/personalProfile.html");
-    }
-    else {
-        res.status(401).send('Password not validated');
-    }
-});
-
 function validateUser(token) {
     try {
         const tokenDecodedData = verify(token, SUPER_SECRET);
@@ -73,34 +57,43 @@ function validateUser(token) {
 
 // Add a new User
 apiRoute.put('/users/newUser', async (req, res) => {
-    let options = req.body;
-    const e = options.email;
-    const pass = await hash(options.password);
-    // const userName = options.username;
+    try {
+        let { email, password } = req.body;
+        if (!email || !password) {
+            //No response on bad email/password
+            return res.status(400).send();
+        }
+        const e = email;
+        const pass = await hash(password);
 
-    const result = await db.createNewUser(e, pass); //TODO: Create this function in the database
-    if (result.ok) {
-        const signedJWT = sign({ user: result }, SUPER_SECRET, { expiresIn: '1 day' });
-        res.cookie('auth', signedJWT, { maxAge: 43200000 });
-        res.status(201).send();
-    }
-    else {
-        return res.status(401).send();
+        const result = await db.createNewUser(e, pass); //TODO: Create this function in the database
+        if (result.ok) {
+            const signedJWT = sign({ user: result }, SUPER_SECRET, { expiresIn: '1 day' });
+            res.cookie('auth', signedJWT, { maxAge: 43200000 });
+            res.status(201).send();
+        }
+        else {
+            res.status(409).send(); //User already exists / Cannot exist
+        }
+    } catch (e) {
+        res.status(500).send();
     }
 });
 
-
 apiRoute.post('/login/passwd', async (req, res) => {
-    const options = req.body;
-    let user = await db.getUserFromEmail(options.email);//TODO: Create function in database
-    if (user != undefined && await verifyPass(options.password, user.password)) {
-        console.log(user.uid);
-        const signedJWT = sign({ user: user.uid }, SUPER_SECRET, { expiresIn: '1 day' });
-        res.cookie('auth', signedJWT, { maxAge: 43200000 });
-        res.status(200).send();
-    }
-    else {
-        res.status(401).send('Password not validated');
+    try {
+        const { email, password } = req.body;
+        let user = await db.getUserFromEmail(email);//TODO: Create function in database
+        if (user !== undefined && user.ok && await verifyPass(password, user.password)) {
+            const signedJWT = sign({ user: user.uid }, SUPER_SECRET, { expiresIn: '1 day' });
+            res.cookie('auth', signedJWT, { maxAge: 43200000 });
+            res.status(200).send();
+        }
+        else {
+            res.status(401).send('Password not validated');
+        }
+    } catch (e) {
+        res.status(500).send();
     }
 });
 

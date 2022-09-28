@@ -1,7 +1,11 @@
 //Import dotenv for database connections
+import { RssFeed } from '@mui/icons-material';
 import 'dotenv/config';
+import e from 'express';
 import pg from 'pg';
 import { _read } from './fileIO.js';
+import { parseMTGCSV } from './MTGCSVParse.js';
+import { getCardData } from './scryfallAPI.js';
 
 const { Pool } = pg;
 
@@ -24,7 +28,6 @@ class Database {
                 this.cols = Object.keys(this.types);
                 this.ok = true;
             }
-
         }
 
         //Initialize all tables as invalid empty tables
@@ -36,17 +39,6 @@ class Database {
         this.dudTable = new SQLTable('');
 
     }
-
-    //For table references
-    get USERS() { return 'user'; }
-    get DECKS() { return 'deck'; }
-    get COLLECTION() { return 'collection'; }
-    get CONTENT() { return 'content'; }
-    get CARDS() { return 'card'; }
-    get INSERT() { return 'insert'; }
-    get SELECT() { return 'select'; }
-    get UPDATE() { return 'update'; }
-    get DELETE() { return 'delete'; }
 
     //Connect to the DB
     async connect() {
@@ -66,12 +58,14 @@ class Database {
 
         this.cardTable.setTypes({
             cardname: 'string',
+            img: 'string',
             setname: 'string',
             colors: 'string',
+            identity: 'string',
             cmc: 'number',
             rarity: 'string',
             defaultcard: 'boolean',
-            bulk: 'object'
+            bulk: 'string'
         });
 
         this.deckContentTable.setTypes({
@@ -115,42 +109,14 @@ class Database {
 
     /**
      * 
-     * 
-     * Query Making Scripts
-     * 
-     * 
-    */
-
-    //Get the table from a string
-    getTable(table) {
-        let tableObj = {
-            card: this.cardTable,
-            content: this.deckContentTable,
-            collection: this.collectionTable,
-            user: this.userTable,
-            deck: this.deckTable
-        }
-        return tableObj[table] || this.dudTable;
-    }
-
-    getQueryType(type) {
-        if ([this.DELETE, this.INSERT, this.SELECT, this.UPDATE].includes(type)) {
-            return { type: type, ok: true };
-        } else {
-            return { ok: false, error: 'Invalid type' }
-        }
-    }
-
-    /**
-     * 
      * Specific Query Functions
      * 
      */
 
     async createNewUser(email, pass) {
-        let query = this.purifyQuery(this.USERS, { email: email, password: pass });
+        let query = this.purifyQuery(this.userTable, { email: email, password: pass });
         if (query.ok) {
-            let queryString = `INSERT INTO Users (email, password) VALUES ($1, $2) Returning *;`;
+            let queryString = `INSERT INTO Users (${query.cols.join(', ')}) VALUES (${query.replacers.join(', ')}) Returning *;`;
             try {
                 const res = await this.client.query(queryString, query.values);
                 return { ok: true, rows: res.rows };
@@ -162,13 +128,112 @@ class Database {
         }
     }
 
+    async getUserFromEmail(email) {
+        let query = this.purifyQuery(this.userTable, { email: email });
+        if (query.cols.includes('email')) {
+            let queryString = `SELECT * FROM Users WHERE email=$1;`;
+            try {
+                const res = await this.client.query(queryString, query.values);
+                if (res.rows.length > 0) {
+                    return { ok: true, ...res.rows[0] };
+                } else {
+                    return { ok: false, error: 'User does not exist' }
+                }
+            } catch (e) {
+                return { ok: false, error: e };
+            }
+        } else {
+            return { ok: false, error: 'Query not ok' };
+        }
+    }
+
+    async importDeck(user, content, deckName) {
+        const parsedData = parseMTGCSV(content);
+        try {
+            for (const name in parsedData) {
+                const res = await this.addCard(name);
+                if (!res.ok) {
+                    return res;
+                };
+            }
+        } catch (e) {
+            return { ok: false, error: e }
+        }
+        return { ok: true };
+    }
+
     /**
+     * Returns the data of the default card in the database with the specified name.
+     * Returns ok: false if the card does not exist.
      * 
-     * 
-     * BUILD QUERY STRINGS
-     * 
-     * 
+     * @param {string} name 
+     * @returns ok, card?, error?
      */
+    async getDefaultCard(name) {
+        let queryString = 'SELECT * FROM Cards WHERE cardname=$1 AND defaultcard=true;';
+        try {
+            const res = await this.client.query(queryString, [name]);
+            if (res.rows.length > 0) {
+                return { ok: true, card: res.rows[0] };
+            } else {
+                return { ok: false, error: 'Card does not exist' };
+            }
+        } catch (e) {
+            return { ok: false, error: 'Database Error' };
+        }
+    }
+
+    /**
+     * Adds a card and all iat's set varients to the database, including the 'default' version.
+     * Skips all cards currently in the database
+     * @param {string} name 
+     * @returns ok, skipped?
+     */
+    async addCard(name) {
+        const cardData = await getCardData(name);
+        if (!cardData.ok) {
+            return { ok: false, error: `Scryfall cannot find card '${name}'` };
+        }
+
+        const cardsBySet = cardData.setData;
+        const skipped = [];
+
+        //Check if the card is in the database
+        for (const set in cardsBySet) {
+            let checkExistsQuery = 'SELECT cardname, setname FROM Cards WHERE cardname=$1 AND setname=$2';
+            try {
+                const res = await this.client.query(checkExistsQuery, [name, set]);
+                if (res.rows.length === 1) {
+                    continue; //Skip adding the card if it exists
+                }
+            } catch (e) {
+                skipped.push(set);
+                continue; //Do not continue if there was a database error
+            }
+
+            //Add the card if necesary
+            let query = this.purifyQuery(this.cardTable, { ...cardsBySet[set], setname: set, cardname: name }, true);
+            if (query.ok) {
+                let queryString = `INSERT INTO Cards (${query.cols.join(', ')}) VALUES (${query.replacers.join(', ')});`;
+                try {
+                    const res = await this.client.query(queryString, query.values);
+                } catch (e) {
+                    skipped.push(set);
+                    continue;
+                }
+            } else {
+                skipped.push(set);
+                continue;
+            }
+        }
+
+        //Return not ok if any of the cards were skipped
+        if (skipped.length > 0) {
+            return { ok: false, skipped: skipped, error: `[${name}: ${skipped}] could not be added to the database` };
+        } else {
+            return { ok: true };
+        }
+    }
 
     /**
      * Takes in a table object and compares the types to the input object.
@@ -183,14 +248,11 @@ class Database {
         let invalid = {};
         let valid = {};
 
-        //Get the table
-        let realTable = this.getTable(table);
-
         //Get the types object
-        let types = realTable.types;
+        let types = table.types;
 
         //Make sure the table is ok
-        if (realTable.ok) {
+        if (table.ok) {
             //Check every type in the query obj
             for (const key in types) {
                 //If the key does not exist in the query, add it to missing
@@ -221,7 +283,7 @@ class Database {
                     return invalid + missing + valid;
                 },
                 //Return not ok if the number of valid keys is niot the same as the number of input keys
-                ok: Object.keys(valid).length === Object.keys(realTable.types).length
+                ok: Object.keys(valid).length === Object.keys(table.types).length
             };
         } else {
             //Return an error if the table is invalid
@@ -230,14 +292,11 @@ class Database {
     }
 
     layoutQueryValueArray(table, query) {
-        //Get the table object
-        let realTable = this.getTable(table);
-
         //Determine that the table is valid
-        if (realTable.ok) {
+        if (table.ok) {
 
             //Force the values from the query object to be in the correct column order
-            return realTable.cols.reduce((p, c) => {
+            return table.cols.reduce((p, c) => {
                 //Only add values that exist in the query
                 if (query.hasOwnProperty(c)) {
                     p.cols.push(c);
@@ -254,8 +313,7 @@ class Database {
     }
 
     purifyQuery(table, query, strict) {
-        let trueTable = this.getTable(table);
-        if (!trueTable.ok) {
+        if (!table.ok) {
             return { ok: false, error: 'Table does not exist' };
         }
         let typedQuery = this.checkTypes(table, query);
@@ -270,8 +328,9 @@ class Database {
         let data = this.layoutQueryValueArray(table, typedQuery.valid);
         return {
             cols: data.cols,
+            replacers: data.cols.map((x, i) => `$${i + 1}`),
             values: data.values,
-            name: trueTable.name,
+            name: table.name,
             missing: typedQuery.missing,
             invalid: typedQuery.invalid,
             ok: true
