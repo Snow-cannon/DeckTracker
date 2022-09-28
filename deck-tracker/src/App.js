@@ -21,8 +21,6 @@ let cards = [];
 for (const card in sampleCards) {
   cards.push({ name: card, ...sampleCards[card] })
 }
-cards.push({ name: "A", colors: ["W", "U", "B", "R", "G"] })
-
 function App(props) {
   const [state, setState] = React.useState({
     drawerOpen: false,
