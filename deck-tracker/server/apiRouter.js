@@ -55,8 +55,8 @@ function validateUser(token) {
     }
 }
 
-// Add a new User
-apiRoute.put('/users/newUser', async (req, res) => {
+// Adds a new User
+apiRoute.put('/users', async (req, res) => {
     try {
         let { email, password } = req.body;
         if (!email || !password) {
@@ -80,12 +80,13 @@ apiRoute.put('/users/newUser', async (req, res) => {
     }
 });
 
-apiRoute.post('/login/passwd', async (req, res) => {
+//Logs in a user
+apiRoute.post('/users/login', async (req, res) => {
     try {
         const { email, password } = req.body;
         let user = await db.getUserFromEmail(email);//TODO: Create function in database
         if (user !== undefined && user.ok && await verifyPass(password, user.password)) {
-            const signedJWT = sign({ user: user.uid }, SUPER_SECRET, { expiresIn: '1 day' });
+            const signedJWT = sign({ user: user.email }, SUPER_SECRET, { expiresIn: '1 day' });
             res.cookie('auth', signedJWT, { maxAge: 43200000 });
             res.status(200).send();
         }
@@ -97,7 +98,8 @@ apiRoute.post('/login/passwd', async (req, res) => {
     }
 });
 
-apiRoute.put('/importDeck', async (req, res) => {
+//Importing deck list
+apiRoute.put('/users/decks', async (req, res) => {
     // authenticate & authorize via JWT
     const authInfo = validateUser(req.cookies["auth"]);
 
@@ -110,12 +112,43 @@ apiRoute.put('/importDeck', async (req, res) => {
     const body = req.body;
     let dbResponse = await db.importDeck(authInfo.data.user, body.deckContent, body.deckName); //TODO: Database function to import deck object and assign cards to user
     if (!dbResponse.ok) {
-        return res.status(422).send({ error: dbResponse.error, data: dbResponse.rows });
+        console.log(dbResponse.error);
+        return res.status(422).send({ error: dbResponse.error.toString() });
     }
     res.status(201).send();
 });
 
-apiRoute.get('/userLibrary', async (req, res) => {
+apiRoute.delete('/users/decks', async (req, res) => {
+    // authenticate & authorize via JWT
+    const authInfo = validateUser(req.cookies["auth"]);
+
+    // If we are not validated, return a 401 error
+    if (!authInfo.ok) {
+        // unauthenticated
+        return res.status(401).send();
+    }
+    const dbResponse = await db.deleteDeck(authInfo.data.user, req.body.deckID); //TODO: Database function to delete based on deckID VALIDATE THE USER IS THE RIGHT ONE
+    if (!dbResponse.ok) {
+        return res.status(400).send({ error: dbResponse.error });
+    }
+    res.status(202).send(dbResponse.rows);
+});
+
+apiRoute.get('/users/decks', async (req, res) => {
+    // If we are not validated, return a 401 error
+    const authInfo = validateUser(req.cookies["auth"]);
+    if (!authInfo.ok) {
+        // unauthenticated
+        return res.status(401).send();
+    }
+    const dbResponse = await db.getUserDecks(authInfo.data.user);
+    if (!dbResponse.ok) {
+        return res.status(400).send({ error: dbResponse.error });
+    }
+    res.status(202).send(dbResponse.rows);
+});
+
+apiRoute.get('/users/collection', async (req, res) => {
     // authenticate & authorize via JWT
     const authInfo = validateUser(req.cookies["auth"]);
 
@@ -126,12 +159,12 @@ apiRoute.get('/userLibrary', async (req, res) => {
     }
     const dbResponse = await db.getUserLibrary(authInfo.data.user); //TODO: Database function to get all decks for requesting user
     if (!dbResponse.ok) {
-        return res.status(400).send({ error: dbResponse.error, data: dbResponse.rows });
+        return res.status(400).send({ error: dbResponse.error.toString() });
     }
     res.status(201).send(dbResponse.rows);
 });
 
-apiRoute.patch('/updateHas', async (req, res) => {
+apiRoute.patch('/users/collection', async (req, res) => {
     // authenticate & authorize via JWT
     const authInfo = validateUser(req.cookies["auth"]);
 
@@ -147,20 +180,5 @@ apiRoute.patch('/updateHas', async (req, res) => {
     res.status(201).send(dbResponse.rows);
 });
 
-apiRoute.delete('/deleteDeck', async (req, res) => {
-    // authenticate & authorize via JWT
-    const authInfo = validateUser(req.cookies["auth"]);
-
-    // If we are not validated, return a 401 error
-    if (!authInfo.ok) {
-        // unauthenticated
-        return res.status(401).send();
-    }
-    const dbResponse = await db.deleteDeck(authInfo.data.user, req.body.deckID); //TODO: Database function to delete based on deckID VALIDATE THE USER IS THE RIGHT ONE
-    if (!dbResponse.ok) {
-        return res.status(400).send({ error: dbResponse.error, data: dbResponse.rows });
-    }
-    res.status(202).send(dbResponse.rows);
-});
 
 export default apiRoute;

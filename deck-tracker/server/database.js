@@ -1,11 +1,10 @@
 //Import dotenv for database connections
-import { RssFeed } from '@mui/icons-material';
 import 'dotenv/config';
-import e from 'express';
 import pg from 'pg';
 import { _read } from './fileIO.js';
 import { parseMTGCSV } from './MTGCSVParse.js';
 import { getCardData } from './scryfallAPI.js';
+import { randomUUID } from 'crypto';
 
 const { Pool } = pg;
 
@@ -71,6 +70,7 @@ class Database {
         this.deckContentTable.setTypes({
             did: 'string',
             cardname: 'string',
+            setname: 'string',
             needed: 'number'
         });
 
@@ -88,6 +88,7 @@ class Database {
 
         this.collectionTable.setTypes({
             cardname: 'string',
+            setname: 'string',
             email: 'string',
             has: 'number'
         });
@@ -148,7 +149,10 @@ class Database {
     }
 
     async importDeck(user, content, deckName) {
+        //Get cards
         const parsedData = parseMTGCSV(content);
+
+        //Add cards to the db
         try {
             for (const name in parsedData) {
                 const res = await this.addCard(name);
@@ -156,12 +160,114 @@ class Database {
                     return res;
                 };
             }
+
+            //Generate random deck ID
+            const deckId = randomUUID();
+
+            //Purify the query
+            const createDeckPure = this.purifyQuery(this.deckTable, {
+                email: user,
+                deckname: deckName,
+                did: deckId
+            }, true);
+
+            // Create the deck
+            if (createDeckPure.ok) {
+                const createDeckQuery = `INSERT INTO Decks (${createDeckPure.cols.join(', ')}) VALUES (${createDeckPure.replacers.join(', ')});`;
+                const res = await this.client.query(createDeckQuery, createDeckPure.values);
+            } else {
+                return { ok: false, error: 'Create Deck query not ok' };
+            }
+
+            //Add each card to the deck in d
+            for (const name in parsedData) {
+                const cardData = await this.getDefaultCard(name);
+                if (!cardData.ok) {
+                    return { ok: false, error: `Cannot get card '${name}'` };
+                }
+                const card = cardData.card;
+                const res = await this.addCardToDeck(name, card.setname, parsedData[name], deckId);
+                if (!res.ok) {
+                    return res;
+                };
+            }
+
+            console.log(await this.getDeckContents(deckId));
+            return { ok: true };
         } catch (e) {
-            return { ok: false, error: e }
+            return { ok: false, error: e };
         }
-        return { ok: true };
     }
 
+    async getUserDecks(user) {
+        //Check if the card exists
+        try {
+            const typeCheck = this.checkTypes(this.deckTable, { email: user });
+            if (typeCheck.validCount !== 1) {
+                return { ok: false, error: 'Incorrect inputs on getUserDecks' };
+            }
+            let selectQueryString = `SELECT deckname, did FROM Decks WHERE email=$1`;
+            const res = await this.client.query(selectQueryString, [user]);
+            return { ok: true, deck: res.rows };
+        } catch (e) {
+            return { ok: false, error: e };
+        }
+    }
+
+    //Returns the contents of a specific deck
+    async getDeckContents(deckId) {
+        //Check if the card exists
+        try {
+            const typeCheck = this.checkTypes(this.deckContentTable, { did: deckId });
+            if (typeCheck.validCount !== 1) {
+                return { ok: false, error: 'Incorrect inputs' };
+            }
+            let selectQueryString = `SELECT cardname, needed FROM DeckContent WHERE did=$1`;
+            const res = await this.client.query(selectQueryString, [deckId]);
+            return { ok: true, deck: res.rows };
+        } catch (e) {
+            return { ok: false, error: e };
+        }
+    }
+
+    async addCardToDeck(name, set, count, deckId) {
+        //Check if the deck has the card
+        try {
+            //Check if the card exists
+            const typeCheck = this.checkTypes(this.deckContentTable, { cardname: name, did: deckId });
+            if (typeCheck.validCount !== 2) {
+                return { ok: false, error: 'Incorrect inputs' };
+            }
+            let selectQueryString = `SELECT needed FROM DeckContent WHERE did=$1 AND cardname=$2;`;
+            const res = await this.client.query(selectQueryString, [deckId, name]);
+
+            //Update the needed value if it does
+            if (res.rows.length > 0) {
+                //Query has already been purified, so no need to check again
+                let needed = res.rows[0].needed + count;
+                const updateQueryString = 'UPDATE DeckContent SET needed=$1 WHERE did=$2 AND cardname=$3;';
+                const resUpdate = await this.client.query(updateQueryString, [needed, deckId, name]);
+                return { ok: true };
+            } else {
+                //Add the card to the collection if it does not
+                let pureQuery = this.purifyQuery(this.deckContentTable, {
+                    cardname: name,
+                    did: deckId,
+                    setname: set,
+                    needed: count
+                }, true);
+                if (pureQuery.ok) {
+                    let queryString = `INSERT INTO DeckContent (${pureQuery.cols.join(', ')}) VALUES (${pureQuery.replacers.join(', ')});`;
+                    const res = await this.client.query(queryString, pureQuery.values);
+                    return { ok: true };
+                } else {
+                    return { ok: false, error: 'pureQuery not OK' };
+                }
+            }
+        } catch (e) {
+            return { ok: false, error: e };
+        }
+    }
     /**
      * Returns the data of the default card in the database with the specified name.
      * Returns ok: false if the card does not exist.
