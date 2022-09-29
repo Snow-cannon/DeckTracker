@@ -8,6 +8,7 @@ import { InputBase } from '@mui/material';
 import { Search } from '@mui/icons-material';
 import { Button } from '@mui/material'
 import { LoginPopup } from './loginPopup.js';
+import { SignupPopup } from './signupPopup.js';
 
 const SearchBox = styled('div')(({ theme }) => ({
   position: 'relative',
@@ -52,13 +53,36 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
 export default function PrimarySearchAppBar(props) {
   const [state, setState] = React.useState({
     loginOpen: false,
+    signupOpen: false
   });
   const openLogin = () => {
     setState({ ...state, loginOpen: true });
   }
-  const closeLogin = (value) => {
+  const closeLogin = () => {
     setState({ ...state, loginOpen: false });
   };
+  const openSignup = () => {
+    setState({ ...state, signupOpen: true });
+  }
+  const closeSignup = () => {
+    setState({ ...state, signupOpen: false });
+  };
+  let menuComp = (<div> <Button color="inherit" onClick={openSignup}>Sign Up</Button>
+    <Button color="inherit" onClick={openLogin}>Login</Button> </div>)
+  {
+    if (props.user !== '') {
+      menuComp =
+        <Typography
+          variant="h6"
+          noWrap
+          component="div"
+          sx={{ display: { xs: 'none', sm: 'block' } }}
+        >
+          {props.user}
+        </Typography>
+    }
+  }
+
 
   return (
     <Box sx={{ flexGrow: 1 }}>
@@ -82,10 +106,11 @@ export default function PrimarySearchAppBar(props) {
             />
           </SearchBox>
           <Box sx={{ flexGrow: 1 }} />
-          <Button color="inherit" onClick={openLogin}>Login</Button>
+          {menuComp}
         </Toolbar>
       </AppBar>
-      <LoginPopup open={state['loginOpen']} onClose={closeLogin}></LoginPopup>
+      <SignupPopup open={state['signupOpen']} onClose={closeSignup} setUserState={props.setUserState}></SignupPopup>
+      <LoginPopup open={state['loginOpen']} onClose={closeLogin} setUserState={props.setUserState}></LoginPopup>
     </Box>
   );
 }

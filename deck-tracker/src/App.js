@@ -26,6 +26,8 @@ function App(props) {
     drawerOpen: false,
   });
 
+  const [userState, setUserState] = React.useState('');
+
   let filterProps = {search: ""};
   for(const filt in props.filterOptions){
     filterProps[filt] = [];
@@ -127,7 +129,7 @@ function App(props) {
 
   return (
     <div>
-      <PrimarySearchAppBar setParentState={setCardSearchFilter}/>
+      <PrimarySearchAppBar setParentState={setCardSearchFilter} setUserState={setUserState} user={userState}/>
       <div id="bx">
         <div className="b">
           <Button variant="contained" endIcon={<FilterAlt />} onClick={toggleDrawer(true)} id="FilterCards">
