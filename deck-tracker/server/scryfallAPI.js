@@ -24,18 +24,20 @@ export async function getCardData(cardName) {
                 delete bulk.colors;
                 delete bulk.identity;
                 delete bulk.image_uris;
+                delete bulk.name;
                 setData[setName] = {
                     cmc: v.cmc,
                     rarity: v.rarity,
                     colors: v.colors.join(''),
                     identity: v.color_identity.join(''),
                     img: JSON.stringify(v.image_uris),
+                    // cardname: v.name,
                     bulk: JSON.stringify(bulk),
                     defaultcard: defSet === setName
                 };
             }
         }
-        return { ok: true, setData: setData };
+        return { ok: true, setData: setData, cardname: card.name };
     } catch (e) {
         return { ok: false };
     }

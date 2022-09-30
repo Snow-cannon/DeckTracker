@@ -154,11 +154,13 @@ class Database {
 
         //Add cards to the db
         try {
+            const correctedData = {};
             for (const name in parsedData) {
                 const res = await this.addCard(name);
                 if (!res.ok) {
                     return res;
                 };
+                correctedData[res.cardname] = parsedData[name];
             }
 
             //Generate random deck ID
@@ -180,20 +182,18 @@ class Database {
             }
 
             //Add each card to the deck in d
-            for (const name in parsedData) {
+            for (const name in correctedData) {
                 const cardData = await this.getDefaultCard(name);
                 if (!cardData.ok) {
                     return { ok: false, error: `Cannot get card '${name}'` };
                 }
                 const card = cardData.card;
-                const res = await this.addCardToDeck(name, card.setname, parsedData[name], deckId);
+                const res = await this.addCardToDeck(card.cardname, card.setname, correctedData[name], deckId);
                 if (!res.ok) {
                     return res;
                 };
             }
-
-            console.log(await this.getDeckContents(deckId));
-            return { ok: true };
+            return { ok: true, deckId: deckId };
         } catch (e) {
             return { ok: false, error: e };
         }
@@ -276,6 +276,9 @@ class Database {
      * @returns ok, card?, error?
      */
     async getDefaultCard(name) {
+        if (typeof name === 'string') {
+
+        }
         let queryString = 'SELECT * FROM Cards WHERE cardname=$1 AND defaultcard=true;';
         try {
             const res = await this.client.query(queryString, [name]);
@@ -283,6 +286,20 @@ class Database {
                 return { ok: true, card: res.rows[0] };
             } else {
                 return { ok: false, error: 'Card does not exist' };
+            }
+        } catch (e) {
+            return { ok: false, error: 'Database Error' };
+        }
+    }
+
+    async getCardData() {
+        let queryString = 'SELECT cardname, setname FROM Cards;';
+        try {
+            const res = await this.client.query(queryString, []);
+            if (res.rows.length > 0) {
+                return { ok: true, cards: res.rows };
+            } else {
+                return { ok: false, error: 'No cards' };
             }
         } catch (e) {
             return { ok: false, error: 'Database Error' };
@@ -302,13 +319,14 @@ class Database {
         }
 
         const cardsBySet = cardData.setData;
+        const cardname = cardData.cardname;
         const skipped = [];
 
         //Check if the card is in the database
         for (const set in cardsBySet) {
             let checkExistsQuery = 'SELECT cardname, setname FROM Cards WHERE cardname=$1 AND setname=$2';
             try {
-                const res = await this.client.query(checkExistsQuery, [name, set]);
+                const res = await this.client.query(checkExistsQuery, [cardname, set]);
                 if (res.rows.length === 1) {
                     continue; //Skip adding the card if it exists
                 }
@@ -318,7 +336,7 @@ class Database {
             }
 
             //Add the card if necesary
-            let query = this.purifyQuery(this.cardTable, { ...cardsBySet[set], setname: set, cardname: name }, true);
+            let query = this.purifyQuery(this.cardTable, { ...cardsBySet[set], cardname: cardname, setname: set }, true);
             if (query.ok) {
                 let queryString = `INSERT INTO Cards (${query.cols.join(', ')}) VALUES (${query.replacers.join(', ')});`;
                 try {
@@ -335,9 +353,54 @@ class Database {
 
         //Return not ok if any of the cards were skipped
         if (skipped.length > 0) {
-            return { ok: false, skipped: skipped, error: `[${name}: ${skipped}] could not be added to the database` };
+            return { ok: false, skipped: skipped, error: `[${cardname}: ${skipped.join(', ')}] could not be added to the database` };
         } else {
-            return { ok: true };
+            return { ok: true, cardname: cardname };
+        }
+    }
+
+    async addToCollection(user, name, amt) {
+        const cardData = await this.getDefaultCard(name);
+        const card = cardData.card;
+        const query = this.purifyQuery(this.collectionTable, {
+            cardname: name,
+            email: user,
+            has: amt,
+            setname: card.setname
+        });
+
+        //Add cards to the db
+        let checkExistsQuery = 'SELECT has FROM Collections WHERE cardname=$1 AND email=$2;';
+        try {
+            const res = await this.client.query(checkExistsQuery, [name, user]);
+            console.log(res.rows)
+            if (res.rows.length === 0) {
+                let addQuery = `INSERT INTO Collections (${query.cols.join(', ')}) VALUES (${query.replacers.join(', ')});`;
+                console.log(addQuery);
+                const added = await this.client.query(addQuery, query.values);
+                return { ok: true };
+            } else {
+                let updateQuery = `UPDATE Collections SET has=$1 WHERE cardname=$2 AND email=$3 AND setname=$4;`;
+                console.log(updateQuery, [amt, name, user, card.setname]);
+                const updated = await this.client.query(updateQuery, [amt, name, user, card.setname]);
+                return { ok: true };
+            }
+        } catch (e) {
+            return { ok: false, error: 'Could not add to collection' };
+        }
+    }
+
+    async getUserCollection(user) {
+        if (typeof user === 'string') {
+            const queryString = 'SELECT cardname, has FROM Collections WHERE email=$1;'
+            try {
+                const res = await this.client.query(queryString, [user]);
+                return { ok: true, data: res.rows };
+            } catch (e) {
+                return { ok: false, error: 'Could not get collection' };
+            }
+        } else {
+            return { ok: false, error: 'Invalid email' }
         }
     }
 

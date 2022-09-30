@@ -102,22 +102,18 @@ apiRoute.post('/users/login', async (req, res) => {
 apiRoute.put('/users/decks', async (req, res) => {
     // authenticate & authorize via JWT
     const authInfo = validateUser(req.cookies["auth"]);
-
-    // If we are not validated, return a 401 error
     if (!authInfo.ok) {
-        // unauthenticated
         return res.status(401).send();
     }
-
     const body = req.body;
     let dbResponse = await db.importDeck(authInfo.data.user, body.deckContent, body.deckName); //TODO: Database function to import deck object and assign cards to user
     if (!dbResponse.ok) {
-        console.log(dbResponse.error);
         return res.status(422).send({ error: dbResponse.error.toString() });
     }
-    res.status(201).send();
+    res.status(201).send({ deckId: dbResponse.deckId });
 });
 
+//Delete a specific deck
 apiRoute.delete('/users/decks', async (req, res) => {
     // authenticate & authorize via JWT
     const authInfo = validateUser(req.cookies["auth"]);
@@ -134,6 +130,7 @@ apiRoute.delete('/users/decks', async (req, res) => {
     res.status(202).send(dbResponse.rows);
 });
 
+//Get a users decks
 apiRoute.get('/users/decks', async (req, res) => {
     // If we are not validated, return a 401 error
     const authInfo = validateUser(req.cookies["auth"]);
@@ -145,9 +142,25 @@ apiRoute.get('/users/decks', async (req, res) => {
     if (!dbResponse.ok) {
         return res.status(400).send({ error: dbResponse.error });
     }
-    res.status(202).send(dbResponse.rows);
+    return res.status(200).send({ data: dbResponse.deck });
 });
 
+apiRoute.get('/users/decks/content', async (req, res) => {
+    // If we are not validated, return a 401 error
+    const authInfo = validateUser(req.cookies["auth"]);
+    if (!authInfo.ok) {
+        // unauthenticated
+        return res.status(401).send();
+    }
+    const body = req.body;
+    const dbResponse = await db.getDeckContents(body.deckId);
+    if (!dbResponse.ok) {
+        return res.status(400).send({ error: dbResponse.error });
+    }
+    return res.status(200).send({ data: dbResponse.deck });
+});
+
+//Get all cards in a users collection
 apiRoute.get('/users/collection', async (req, res) => {
     // authenticate & authorize via JWT
     const authInfo = validateUser(req.cookies["auth"]);
@@ -157,13 +170,14 @@ apiRoute.get('/users/collection', async (req, res) => {
         // unauthenticated
         return res.status(401).send();
     }
-    const dbResponse = await db.getUserLibrary(authInfo.data.user); //TODO: Database function to get all decks for requesting user
+    const dbResponse = await db.getUserCollection(authInfo.data.user); //TODO: Database function to get all decks for requesting user
     if (!dbResponse.ok) {
         return res.status(400).send({ error: dbResponse.error.toString() });
     }
-    res.status(201).send(dbResponse.rows);
+    res.status(201).send({ data: dbResponse.data });
 });
 
+//Update a users collection
 apiRoute.patch('/users/collection', async (req, res) => {
     // authenticate & authorize via JWT
     const authInfo = validateUser(req.cookies["auth"]);
@@ -173,11 +187,27 @@ apiRoute.patch('/users/collection', async (req, res) => {
         // unauthenticated
         return res.status(401).send();
     }
-    const dbResponse = await db.updateUserHas(authInfo.data.user, req.body.cardName, req.body.totalAmount); //TODO: Database function to update collection data
+    const dbResponse = await db.addToCollection(authInfo.data.user, req.body.cardName, req.body.totalAmount); //TODO: Database function to update collection data
+    if (!dbResponse.ok) {
+        return res.status(400).send({ error: dbResponse.error });
+    }
+    res.status(200).send();
+});
+
+apiRoute.get('/cards', async (req, res) => {
+    // authenticate & authorize via JWT
+    const authInfo = validateUser(req.cookies["auth"]);
+
+    // If we are not validated, return a 401 error
+    if (!authInfo.ok) {
+        // unauthenticated
+        return res.status(401).send();
+    }
+    const dbResponse = await db.getCardData(); //TODO: Database function to update collection data
     if (!dbResponse.ok) {
         return res.status(400).send({ error: dbResponse.error, data: dbResponse.rows });
     }
-    res.status(201).send(dbResponse.rows);
+    res.status(200).send({ data: dbResponse.cards });
 });
 
 
