@@ -9,6 +9,7 @@ import { Search } from '@mui/icons-material';
 import { Button } from '@mui/material'
 import { LoginPopup } from './loginPopup.js';
 import { SignupPopup } from './signupPopup.js';
+import { ImportPopup } from './ImportPopup.js';
 
 const SearchBox = styled('div')(({ theme }) => ({
   position: 'relative',
@@ -53,7 +54,8 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
 export default function PrimarySearchAppBar(props) {
   const [state, setState] = React.useState({
     loginOpen: false,
-    signupOpen: false
+    signupOpen: false,
+    importOpen: false
   });
   const openLogin = () => {
     setState({ ...state, loginOpen: true });
@@ -67,11 +69,20 @@ export default function PrimarySearchAppBar(props) {
   const closeSignup = () => {
     setState({ ...state, signupOpen: false });
   };
-  let menuComp = (<div> <Button color="inherit" onClick={openSignup}>Sign Up</Button>
+  const openImport = () => {
+    setState({ ...state, importOpen: true });
+  }
+  const closeImport = () => {
+    setState({ ...state, importOpen : false });
+  };
+  let menuComp = (<div>
+  <Button color="inherit" onClick={openSignup}>Sign Up</Button>
     <Button color="inherit" onClick={openLogin}>Login</Button> </div>)
   {
     if (props.user !== '') {
       menuComp =
+      <div>
+         <Button color="inherit" onClick={openImport}>Import Deck</Button>
         <Typography
           variant="h6"
           noWrap
@@ -80,6 +91,7 @@ export default function PrimarySearchAppBar(props) {
         >
           {props.user}
         </Typography>
+        </div>
     }
   }
 
@@ -109,6 +121,7 @@ export default function PrimarySearchAppBar(props) {
           {menuComp}
         </Toolbar>
       </AppBar>
+      <ImportPopup open={state['importOpen']} onClose={closeImport} setUserState={props.setUserState}></ImportPopup>
       <SignupPopup open={state['signupOpen']} onClose={closeSignup} setUserState={props.setUserState}></SignupPopup>
       <LoginPopup open={state['loginOpen']} onClose={closeLogin} setUserState={props.setUserState}></LoginPopup>
     </Box>
