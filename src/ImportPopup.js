@@ -35,12 +35,13 @@ export function ImportPopup(props) {
                         margin="dense"
                         id="deckContent"
                         label="Deck Content"
-                        fullWidth
+                        multiline
+                        maxRows={8}
                         variant="standard"
                     />
                 </DialogContent>
                 <DialogActions style={{ justifyContent: 'center' }}>
-                    <Button variant='contained' onClick={(e) => handleSignup(document.getElementById('deckName').value, document.getElementById('deckContent').value)}>Import</Button>
+                    <Button variant='contained' onClick={(e) => handleImport(document.getElementById('deckName').value, document.getElementById('deckContent').value)}>Import</Button>
                 </DialogActions>
             </Dialog>
         </div>

@@ -17,10 +17,6 @@ import { Box } from "@mui/system";
 import sampleCards from "./sampleCards.json";
 import PrimarySearchAppBar from "./navBar.js";
 
-let cards = [];
-for (const card in sampleCards) {
-  cards.push({ name: card, ...sampleCards[card] })
-}
 function App(props) {
   const [state, setState] = React.useState({
     drawerOpen: false,
@@ -34,9 +30,26 @@ function App(props) {
   }
 
   const [cardState, setCardState] = React.useState({
-    cards: cards,
+    cards: [],
     filters: filterProps
   });
+
+  React.useEffect(async () => {
+    let res = await fetch('/api/users/decks');
+    if(res.ok){
+      let userDecks = (await res.json()).data;
+      for(const deck of userDecks){
+        let deckRes = await fetch('/api/users/decks/content', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({"deckId": deck.did})});
+        if(deckRes.ok){
+          let cards = await deckRes.json()
+          console.log(cards);
+          setCardState({...cardState, 'cards': cards.data});
+        }
+      }
+    }
+    
+    console.log(cardState);
+  }, [])
 
 
 
@@ -72,13 +85,13 @@ function App(props) {
   }
 
   const applyFilters = () => {
-    let cards = [];
-    for (const card in sampleCards) {
-      if (checkCard(cardState['filters'], {name: card, ...sampleCards[card]})) {
-        cards.push({ name: card, ...sampleCards[card] })
-      }
-    }
-    setCardState({ ...cardState, cards: cards });
+    // let cards = [];
+    // for (const card in sampleCards) {
+    //   if (checkCard(cardState['filters'], {name: card, ...sampleCards[card]})) {
+    //     cards.push({ name: card, ...sampleCards[card] })
+    //   }
+    // }
+    // setCardState({ ...cardState, cards: cards });
   };
 
   const checkCard = (filters, card) => {

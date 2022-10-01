@@ -145,7 +145,7 @@ apiRoute.get('/users/decks', async (req, res) => {
     return res.status(200).send({ data: dbResponse.deck });
 });
 
-apiRoute.get('/users/decks/content', async (req, res) => {
+apiRoute.post('/users/decks/content', async (req, res) => {
     // If we are not validated, return a 401 error
     const authInfo = validateUser(req.cookies["auth"]);
     if (!authInfo.ok) {

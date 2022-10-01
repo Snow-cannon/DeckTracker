@@ -222,7 +222,7 @@ class Database {
             if (typeCheck.validCount !== 1) {
                 return { ok: false, error: 'Incorrect inputs' };
             }
-            let selectQueryString = `SELECT cardname, needed FROM DeckContent WHERE did=$1`;
+            let selectQueryString = `SELECT * FROM DeckContent NATURAL JOIN Cards WHERE did=$1`;
             const res = await this.client.query(selectQueryString, [deckId]);
             return { ok: true, deck: res.rows };
         } catch (e) {

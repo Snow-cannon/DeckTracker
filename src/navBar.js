@@ -121,7 +121,7 @@ export default function PrimarySearchAppBar(props) {
           {menuComp}
         </Toolbar>
       </AppBar>
-      <ImportPopup open={state['importOpen']} onClose={closeImport} setUserState={props.setUserState}></ImportPopup>
+      <ImportPopup open={state['importOpen']} onClose={closeImport}></ImportPopup>
       <SignupPopup open={state['signupOpen']} onClose={closeSignup} setUserState={props.setUserState}></SignupPopup>
       <LoginPopup open={state['loginOpen']} onClose={closeLogin} setUserState={props.setUserState}></LoginPopup>
     </Box>

@@ -9,7 +9,7 @@ import { DialogActions } from '@mui/material';
 export function SignupPopup(props) {
     async function handleSignup(email, password) {
         console.log(email, password);
-        let res = await fetch('/api/users/newUser', {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({'email': email, 'password': password})});
+        let res = await fetch('/api/users', {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({'email': email, 'password': password})});
         if (res.status === 201) {
             props.setUserState(email)
             props.onClose();

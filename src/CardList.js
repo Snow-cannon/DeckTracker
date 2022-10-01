@@ -15,7 +15,7 @@ function CardEntry(props) {
   const [state, setState] = React.useState({
     elevation: 4,
     has: parseInt(props.cardData.has) || 0,
-    needs: parseInt(props.cardData.needs) || 0
+    needs: parseInt(props.cardData.needed) || 0
   });
   const onMouseOver = () => setState({ ...state, elevation: 8 });
   const onMouseOut = () => setState({ ...state, elevation: 4 });
@@ -39,13 +39,13 @@ function CardEntry(props) {
     >
       <CardContent  className={'cardText'}>
         <Typography noWrap sx={{ fontSize: "100%" }} color="text.primary">
-          {props.cardData.name}
+          {props.cardData.cardname}
         </Typography>
       </CardContent>
       <CardActions className={"parentFlexRight"}>
         <div className="manaIconContainer">
           {uncoloredPip}
-          {props.cardData.colors.map((c, i) => {
+          {props.cardData.colors.split('').map((c, i) => {
             return (
               <img
                 src={manaSymbols[c]}
@@ -87,7 +87,7 @@ function CardEntry(props) {
 function CardList(props) {
   return (
     <Stack spacing={2} sx={{ minWidth: 200, maxWidth: 800 }} width={'90%'}>
-      {props.cards.sort((a, b) => ('' + a.name).localeCompare(b.name)).map((card, i) => {
+      {props.cards.sort((a, b) => ('' + a.cardname).localeCompare(b.cardname)).map((card, i) => {
         return <CardEntry cardData={card} key={i} />;
       })}
     </Stack>
