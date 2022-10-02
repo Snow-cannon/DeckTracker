@@ -18,20 +18,20 @@ CREATE TABLE IF NOT EXISTS Users (
 );
 
 CREATE TABLE IF NOT EXISTS Decks (
-    did UUID PRIMARY KEY,
+    deckid UUID PRIMARY KEY,
     deckname varchar(100),
     email varchar(320),
     FOREIGN KEY (email) REFERENCES Users
 );
 
 CREATE TABLE IF NOT EXISTS DeckContent (
-    did UUID,
+    deckid UUID,
     cardname varchar(200),
     setname varchar(50),
     needed int,
     FOREIGN KEY (cardname, setname) REFERENCES Cards,
-    FOREIGN KEY (did) REFERENCES Decks,
-    PRIMARY KEY (did, cardname)
+    FOREIGN KEY (deckid) REFERENCES Decks,
+    PRIMARY KEY (deckid, cardname)
 );
 
 CREATE TABLE IF NOT EXISTS Collections (

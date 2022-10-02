@@ -31,7 +31,7 @@ app.use(jwt({
         }
         return null;
     }
-}).unless({ path: ['/api/login/passwd', '/api/users/newUser'] })); //TODO: Change endpoints
+}).unless({ path: ['/api/users/login', '/api/users/signup'] }));
 
 //Match invalid server requests
 app.all('*', async (request, response) => {

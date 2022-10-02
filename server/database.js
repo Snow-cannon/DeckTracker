@@ -68,8 +68,8 @@ class Database {
             if (typeof error === 'function') {
                 error(e);
             } else {
-                //Log if there is no error function
-                console.log(e, '\n');
+                //Log if there is no error function in development
+                // console.log(e, '\n');
             }
 
             //Return undefined if there is an error
@@ -87,11 +87,11 @@ class Database {
      */
     async createNewUser(email, pass) {
         //Check if the user exists
-        let queryString = 'SELECT * FROM Users WHERE email=$1, password=$2;'
-        const exists = await this.runQuery(queryString, [email, pass]);
+        let queryString = 'SELECT * FROM Users WHERE email=$1;'
+        const exists = await this.runQuery(queryString, [email]);
 
         //If the user already exists, return undefined
-        if (exists && exists.length) {
+        if ((exists && exists.length) || !exists) {
             return undefined;
         }
 
@@ -100,7 +100,42 @@ class Database {
         const res = await this.runQuery(queryString, [email, pass]);
 
         //Return the user data if it exists, undefined otherwise
-        return res && res.length ? res[0] : res;
+        return res && res.length ? res[0] : undefined;
+    }
+
+    async deleteUser(email) {
+        //Check if the user exists
+        let queryString = 'SELECT email FROM Users WHERE email=$1;';
+        const exists = await this.runQuery(queryString, [email]);
+        if (exists) {
+            //delete the users collection
+            let queryString = 'DELETE FROM Collections WHERE email=$1 RETURNING *;';
+            const collection = await this.runQuery(queryString, [email]);
+            if (collection) {
+                //Delete the deck contents
+                let queryString = 'DELETE FROM DeckContent WHERE deckid=ANY(SELECT CAST(deckid AS UUID) FROM Decks WHERE email=$1) RETURNING *;';
+                const contents = await this.runQuery(queryString, [email]);
+                if (contents) {
+                    //Delete the decks attatched to the user
+                    queryString = 'DELETE FROM Decks WHERE email=$1 RETURNING *;';
+                    const decks = await this.runQuery(queryString, [email]);
+                    if (decks) {
+                        //Delete the user itself
+                        queryString = 'DELETE FROM Users WHERE email=$1 RETURNING *;';
+                        const user = await this.runQuery(queryString, [email]);
+                        return {
+                            collection,
+                            contents,
+                            decks,
+                            email: user[0].email
+                        }
+                    }
+                }
+            }
+        }
+
+        //Return undefined if there was a problem
+        return undefined;
     }
 
     /**
@@ -116,7 +151,7 @@ class Database {
         const res = await this.runQuery(queryString, [email]);
 
         //Return the user data if it exists, undefined otherwise
-        return res && res.length ? res[0] : res;
+        return res && res.length ? res[0] : undefined;
     }
 
     /**
@@ -149,9 +184,9 @@ class Database {
         }
 
         //Generate random deck ID
-        const did = randomUUID();
-        const createDeckQuery = `INSERT INTO Decks (did, deckname, email) VALUES ($1, $2, $3);`;
-        const res = await this.runQuery(createDeckQuery, [did, deckname, email]);
+        const deckid = randomUUID();
+        const createDeckQuery = `INSERT INTO Decks (deckid, deckname, email) VALUES ($1, $2, $3);`;
+        const res = await this.runQuery(createDeckQuery, [deckid, deckname, email]);
 
         //Return undefined if the deck could not be created
         if (!res) { return undefined; }
@@ -165,17 +200,14 @@ class Database {
             if (!card) { skippedCards.push(cardname); }
 
             //Add the card to the created deck
-            const res = await this.addCardToDeck(card.cardname, card.setname, correctedData[cardname], did);
+            const res = await this.addCardToDeck(card.cardname, card.setname, correctedData[cardname], deckid);
 
             //Push to the skippedCards array if there was a database error
             if (!res) { skippedCards.push(cardname); };
         }
 
-        //Log the skipped cards
-        if (skippedCards.length > 0) { console.log(skippedCards); }
-
         //Return all the skipped cards and the deck id
-        return { skipped: skippedCards, did: did };
+        return { skipped: skippedCards, deckid: deckid };
     }
 
     /**
@@ -186,7 +218,7 @@ class Database {
      * @returns 
      */
     async getUserDecks(email) {
-        let queryString = `SELECT deckname, did FROM Decks WHERE email=$1`;
+        let queryString = `SELECT deckname, deckid FROM Decks WHERE email=$1`;
         return await this.runQuery(queryString, [email]);
     }
 
@@ -194,12 +226,12 @@ class Database {
      * Returns the contents of the deck as an array of cards and
      * the amount of each card the deck needs
      * 
-     * @param {string} did 
+     * @param {string} deckid 
      * @returns deck contents
      */
-    async getDeckContents(did) {
-        let queryString = `SELECT * FROM DeckContent NATURAL JOIN Cards WHERE did=$1`;
-        return await this.runQuery(queryString, [did]);
+    async getDeckContents(deckid, email) {
+        let queryString = `SELECT * FROM DeckContent NATURAL JOIN Cards NATURAL JOIN Decks WHERE deckid=CAST($1 AS UUID) AND email=$2`;
+        return await this.runQuery(queryString, [deckid, email]);
     }
 
     /**
@@ -209,13 +241,13 @@ class Database {
      * @param {string} cardname 
      * @param {string} setname 
      * @param {number} count 
-     * @param {string} did 
+     * @param {string} deckid 
      * @returns empty array or undefined
      */
-    async addCardToDeck(cardname, setname, count, did) {
+    async addCardToDeck(cardname, setname, count, deckid) {
         //Query the database to check that the deck already contains the card
-        let queryString = `SELECT needed FROM DeckContent WHERE did=$1 AND cardname=$2;`;
-        const res = await this.runQuery(queryString, [did, cardname]);
+        let queryString = `SELECT needed FROM DeckContent WHERE deckid=CAST($1 AS UUID) AND cardname=$2;`;
+        const res = await this.runQuery(queryString, [deckid, cardname]);
 
         //Return undefined if the result is not valid
         if (!res) { return undefined; }
@@ -224,12 +256,12 @@ class Database {
         if (res.length > 0) {
             //Increase the amount needed
             let needed = res[0].needed + count;
-            queryString = 'UPDATE DeckContent SET needed=$1 WHERE did=$2 AND cardname=$3;';
-            return await this.runQuery(queryString, [needed, did, cardname]);
+            queryString = 'UPDATE DeckContent SET needed=$1 WHERE deckid=CAST($2 AS UUID) AND cardname=$3;';
+            return await this.runQuery(queryString, [needed, deckid, cardname]);
         } else {
             //Create the card entry and set the amount needed if it dose not yet exist
-            queryString = `INSERT INTO DeckContent (did, cardname, setname, needed) VALUES ($1, $2, $3, $4);`;
-            return await this.runQuery(queryString, [did, cardname, setname, count]);
+            queryString = `INSERT INTO DeckContent (deckid, cardname, setname, needed) VALUES ($1, $2, $3, $4);`;
+            return await this.runQuery(queryString, [deckid, cardname, setname, count]);
         }
     }
 
@@ -246,17 +278,7 @@ class Database {
         const res = await this.runQuery(queryString, [cardname]);
 
         //Return the card data if it exists or undefined otherwise
-        return res && res.length ? res[0] : res;
-    }
-
-    /**
-     * Returns all card data in the database
-     * 
-     * @returns card data
-     */
-    async getAllCardData() {
-        let queryString = 'SELECT cardname, setname FROM Cards;';
-        return await this.runQuery(queryString, []);
+        return res && res.length ? res[0] : undefined;
     }
 
     /**
@@ -342,6 +364,10 @@ class Database {
         //Get the card
         const card = await this.getDefaultCard(cardname);
 
+        if (!card) {
+            return undefined;
+        }
+
         //See if the card exists
         let queryString = 'SELECT has FROM Collections WHERE cardname=$1 AND email=$2;';
         const exists = await this.runQuery(queryString, [cardname, email]);
@@ -349,10 +375,10 @@ class Database {
         //Add it if it does not exist
         if (exists && !exists.length) {
             queryString = `INSERT INTO Collections (cardname, email, setname, has) VALUES ($1, $2, $3, $4);`;
-            return await this.client.query(queryString, [cardname, email, card.setname, amt]);
-        } else { //Update it if it dose
+            return await this.runQuery(queryString, [cardname, email, card.setname, amt]);
+        } else { //Update it if it does
             queryString = `UPDATE Collections SET has=$1 WHERE cardname=$2 AND email=$3 AND setname=$4;`;
-            return await this.client.query(queryString, [amt, cardname, email, card.setname]);
+            return await this.runQuery(queryString, [amt, cardname, email, card.setname]);
         }
     }
 
@@ -373,33 +399,33 @@ class Database {
      * on success and undefined on an error.
      * 
      * @param {string} email 
-     * @param {string} did 
+     * @param {string} deckid 
      * @returns 
      */
-    async deleteDeck(email, did) {
+    async deleteDeck(email, deckid) {
         //Check if the deck exists
-        let queryString = 'SELECT did FROM Decks WHERE email=$1 AND did= CAST ($2 AS UUID);';
-        const exists = await this.runQuery(queryString, [email, did]);
-        if (exists) {
+        let queryString = 'SELECT deckid FROM Decks WHERE email=$1 AND deckid=CAST($2 AS UUID);';
+        const exists = await this.runQuery(queryString, [email, deckid]);
+        if (exists && exists.length) {
             //If it exists, delete all cards from the deckContents table
-            queryString = 'DELETE FROM DeckContent WHERE did= CAST ($1 AS UUID) RETURNING cardname, needed;'
-            const contents = await this.runQuery(queryString, [did]);
+            queryString = 'DELETE FROM DeckContent WHERE deckid=CAST($1 AS UUID) RETURNING cardname, needed;'
+            const contents = await this.runQuery(queryString, [deckid]);
             if (contents) {
                 //If successful, delete the deck itself
-                queryString = 'DELETE FROM Decks WHERE did= CAST ($1 AS UUID) RETURNING *;'
-                const res = await this.runQuery(queryString, [did]);
+                queryString = 'DELETE FROM Decks WHERE deckid=CAST($1 AS UUID) RETURNING *;'
+                const res = await this.runQuery(queryString, [deckid]);
                 if (res) {
                     //If the deck got deleted, return the deck data and the deck contents
                     return { ...res[0], contents: contents };
                 } else {
                     //If the deck was not deleted, return the contents
-                    return contents;
+                    return { deckid: deckid, contents: contents };
                 }
             } else {
                 return undefined;
             }
         } else {
-            return exists;
+            return undefined;
         }
     }
 
