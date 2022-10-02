@@ -1,7 +1,7 @@
 import express from 'express';
 import jwtSigner from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
-import { db } from './database2.js';
+import { db } from './database.js';
 import * as crypto from 'crypto';
 const { sign, verify } = jwtSigner;
 
@@ -107,11 +107,11 @@ apiRoute.put('/users/decks', async (req, res) => {
         return res.status(401).send();
     }
     const body = req.body;
-    let dbResponse = await db.importDeck(authInfo.data.user, body.deckContent, body.deckName); //TODO: Database function to import deck object and assign cards to user
+    let dbResponse = await db.importDeck(authInfo.data.user, body.deckContent, body.deckName);
     if (!dbResponse) {
         return res.status(422).send({ res: dbResponse });
     }
-    res.status(201).send({ did: dbResponse });
+    res.status(201).send({ did: dbResponse.did, skipped: dbResponse.skipped });
 });
 
 //Delete a specific deck
@@ -124,11 +124,12 @@ apiRoute.delete('/users/decks', async (req, res) => {
         // unauthenticated
         return res.status(401).send();
     }
-    const dbResponse = await db.deleteDeck(authInfo.data.user, req.body.deckID); //TODO: Database function to delete based on deckID VALIDATE THE USER IS THE RIGHT ONE
+
+    const dbResponse = await db.deleteDeck(authInfo.data.user, req.body.deckID);
     if (!dbResponse) {
         return res.status(400).send();
     }
-    res.status(202).send(dbResponse);
+    res.status(202).send({ deck: dbResponse });
 });
 
 //Get a users decks
@@ -143,7 +144,7 @@ apiRoute.get('/users/decks', async (req, res) => {
     if (!dbResponse) {
         return res.status(400).send();
     }
-    return res.status(200).send({ data: dbResponse });
+    return res.status(200).send({ decks: dbResponse });
 });
 
 apiRoute.post('/users/decks/content', async (req, res) => {
@@ -158,7 +159,7 @@ apiRoute.post('/users/decks/content', async (req, res) => {
     if (!dbResponse) {
         return res.status(400).send();
     }
-    return res.status(200).send({ data: dbResponse });
+    return res.status(200).send({ contents: dbResponse });
 });
 
 //Get all cards in a users collection
@@ -171,11 +172,11 @@ apiRoute.get('/users/collection', async (req, res) => {
         // unauthenticated
         return res.status(401).send();
     }
-    const dbResponse = await db.getUserCollection(authInfo.data.user); //TODO: Database function to get all decks for requesting user
+    const dbResponse = await db.getUserCollection(authInfo.data.user);
     if (!dbResponse) {
         return res.status(400).send();
     }
-    res.status(201).send({ data: dbResponse });
+    res.status(201).send({ collection: dbResponse });
 });
 
 //Update a users collection
@@ -188,7 +189,7 @@ apiRoute.patch('/users/collection', async (req, res) => {
         // unauthenticated
         return res.status(401).send();
     }
-    const dbResponse = await db.addToCollection(authInfo.data.user, req.body.cardName, req.body.totalAmount); //TODO: Database function to update collection data
+    const dbResponse = await db.addToCollection(authInfo.data.user, req.body.cardName, req.body.totalAmount);
     if (!dbResponse) {
         return res.status(400).send();
     }
@@ -204,11 +205,11 @@ apiRoute.get('/cards', async (req, res) => {
         // unauthenticated
         return res.status(401).send();
     }
-    const dbResponse = await db.getAllCardData(); //TODO: Database function to update collection data
+    const dbResponse = await db.getAllCardData();
     if (!dbResponse) {
         return res.status(400).send();
     }
-    res.status(200).send({ data: dbResponse });
+    res.status(200).send({ cards: dbResponse });
 });
 
 

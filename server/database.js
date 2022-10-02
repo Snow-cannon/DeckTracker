@@ -13,33 +13,11 @@ class Database {
     constructor(dburl) {
         //URL for connecting to the DB
         this.dburl = dburl;
-
-        class SQLTable {
-            constructor(name) {
-                this.name = name;
-                this.types = {};
-                this.cols = [];
-                this.ok = false;
-            }
-
-            setTypes(types) {
-                this.types = types || {};
-                this.cols = Object.keys(this.types);
-                this.ok = true;
-            }
-        }
-
-        //Initialize all tables as invalid empty tables
-        this.deckTable = new SQLTable('Decks');
-        this.cardTable = new SQLTable('Cards');
-        this.collectionTable = new SQLTable('Collections');
-        this.deckContentTable = new SQLTable('DeckContent');
-        this.userTable = new SQLTable('Users');
-        this.dudTable = new SQLTable('');
-        
     }
 
-    //Connect to the DB
+    /**
+     * Connects this object to the specified DB
+     */
     async connect() {
         this.pool = new Pool({
             connectionString: this.dburl,
@@ -53,461 +31,380 @@ class Database {
         await this.init();
     }
 
-    setTableData() {
-
-        this.cardTable.setTypes({
-            cardname: 'string',
-            img: 'string',
-            setname: 'string',
-            colors: 'string',
-            identity: 'string',
-            cmc: 'number',
-            rarity: 'string',
-            defaultcard: 'boolean',
-            bulk: 'string'
-        });
-
-        this.deckContentTable.setTypes({
-            did: 'string',
-            cardname: 'string',
-            setname: 'string',
-            needed: 'number'
-        });
-
-        //Decks
-        this.deckTable.setTypes({
-            did: 'string',
-            deckname: 'string',
-            email: 'string'
-        });
-
-        this.userTable.setTypes({
-            email: 'string',
-            password: 'string'
-        });
-
-        this.collectionTable.setTypes({
-            cardname: 'string',
-            setname: 'string',
-            email: 'string',
-            has: 'number'
-        });
-
-    }
-
-    //Initialize the DB with tables and initialize the table objects
+    /**
+     * Initializes the database with data
+     */
     async init() {
-        this.setTableData();
         let sql = await _read('server/initdb.sql');
         await this.client.query(sql);
     }
 
-    // Close the pool.
+    /**
+     * Disconnects this object from the database
+     */
     async close() {
         this.client.release();
         await this.pool.end();
     }
 
     /**
+     * Runs a query on the database and returns the result.
+     * Returns undefined if there is an error and logs the error
+     * if there is no error handler
      * 
-     * Specific Query Functions
-     * 
+     * @param {string} query 
+     * @param {any[]} values 
+     * @param {function(string):void} error
+     * @returns Results of a database query
      */
+    async runQuery(queryString, values, error) {
+        //Wrap database function in a try/catch to get errors
+        try {
+            //Return the result on successful query
+            const res = await this.client.query(queryString, values);
+            return res.rows;
+        } catch (e) {
+            //Run the error script on a database error
+            if (typeof error === 'function') {
+                error(e);
+            } else {
+                //Log if there is no error function
+                console.log(e, '\n');
+            }
 
+            //Return undefined if there is an error
+            return undefined;
+        }
+    }
+
+    /**
+     * Returns the result of creating a new user.
+     * Returns undefined if unsuccessful
+     * 
+     * @param {string} email 
+     * @param {string} pass
+     * @returns result of query
+     */
     async createNewUser(email, pass) {
-        let query = this.purifyQuery(this.userTable, { email: email, password: pass });
-        if (query.ok) {
-            let queryString = `INSERT INTO Users (${query.cols.join(', ')}) VALUES (${query.replacers.join(', ')}) Returning *;`;
-            try {
-                const res = await this.client.query(queryString, query.values);
-                return { ok: true, rows: res.rows };
-            } catch (e) {
-                return { ok: false, error: e };
-            }
-        } else {
-            return { ok: false, error: 'Query not ok' };
+        //Check if the user exists
+        let queryString = 'SELECT * FROM Users WHERE email=$1, password=$2;'
+        const exists = await this.runQuery(queryString, [email, pass]);
+
+        //If the user already exists, return undefined
+        if (exists && exists.length) {
+            return undefined;
         }
+
+        //If the user does not exist, create it
+        queryString = `INSERT INTO Users (email, password) VALUES ($1, $2) Returning *;`;
+        const res = await this.runQuery(queryString, [email, pass]);
+
+        //Return the user data if it exists, undefined otherwise
+        return res && res.length ? res[0] : res;
     }
 
-    async getUserFromEmail(email) {
-        let query = this.purifyQuery(this.userTable, { email: email });
-        if (query.cols.includes('email')) {
-            let queryString = `SELECT * FROM Users WHERE email=$1;`;
-            try {
-                const res = await this.client.query(queryString, query.values);
-                if (res.rows.length > 0) {
-                    return { ok: true, ...res.rows[0] };
-                } else {
-                    return { ok: false, error: 'User does not exist' }
-                }
-            } catch (e) {
-                return { ok: false, error: e };
-            }
-        } else {
-            return { ok: false, error: 'Query not ok' };
-        }
-    }
-
-    async importDeck(user, content, deckName) {
-        //Get cards
-        const parsedData = parseMTGCSV(content);
-
-        //Add cards to the db
-        try {
-            const correctedData = {};
-            for (const name in parsedData) {
-                const res = await this.addCard(name);
-                if (!res.ok) {
-                    return res;
-                };
-                correctedData[res.cardname] = parsedData[name];
-            }
-
-            //Generate random deck ID
-            const deckId = randomUUID();
-
-            //Purify the query
-            const createDeckPure = this.purifyQuery(this.deckTable, {
-                email: user,
-                deckname: deckName,
-                did: deckId
-            }, true);
-
-            // Create the deck
-            if (createDeckPure.ok) {
-                const createDeckQuery = `INSERT INTO Decks (${createDeckPure.cols.join(', ')}) VALUES (${createDeckPure.replacers.join(', ')});`;
-                const res = await this.client.query(createDeckQuery, createDeckPure.values);
-            } else {
-                return { ok: false, error: 'Create Deck query not ok' };
-            }
-
-            //Add each card to the deck in d
-            for (const name in correctedData) {
-                const cardData = await this.getDefaultCard(name);
-                if (!cardData.ok) {
-                    return { ok: false, error: `Cannot get card '${name}'` };
-                }
-                const card = cardData.card;
-                const res = await this.addCardToDeck(card.cardname, card.setname, correctedData[name], deckId);
-                if (!res.ok) {
-                    return res;
-                };
-            }
-            return { ok: true, deckId: deckId };
-        } catch (e) {
-            return { ok: false, error: e };
-        }
-    }
-
-    async getUserDecks(user) {
-        //Check if the card exists
-        try {
-            const typeCheck = this.checkTypes(this.deckTable, { email: user });
-            if (typeCheck.validCount !== 1) {
-                return { ok: false, error: 'Incorrect inputs on getUserDecks' };
-            }
-            let selectQueryString = `SELECT deckname, did FROM Decks WHERE email=$1`;
-            const res = await this.client.query(selectQueryString, [user]);
-            return { ok: true, deck: res.rows };
-        } catch (e) {
-            return { ok: false, error: e };
-        }
-    }
-
-    //Returns the contents of a specific deck
-    async getDeckContents(deckId) {
-        //Check if the card exists
-        try {
-            const typeCheck = this.checkTypes(this.deckContentTable, { did: deckId });
-            if (typeCheck.validCount !== 1) {
-                return { ok: false, error: 'Incorrect inputs' };
-            }
-            let selectQueryString = `SELECT * FROM DeckContent NATURAL JOIN Cards WHERE did=$1`;
-            const res = await this.client.query(selectQueryString, [deckId]);
-            return { ok: true, deck: res.rows };
-        } catch (e) {
-            return { ok: false, error: e };
-        }
-    }
-
-    async addCardToDeck(name, set, count, deckId) {
-        //Check if the deck has the card
-        try {
-            //Check if the card exists
-            const typeCheck = this.checkTypes(this.deckContentTable, { cardname: name, did: deckId });
-            if (typeCheck.validCount !== 2) {
-                return { ok: false, error: 'Incorrect inputs' };
-            }
-            let selectQueryString = `SELECT needed FROM DeckContent WHERE did=$1 AND cardname=$2;`;
-            const res = await this.client.query(selectQueryString, [deckId, name]);
-
-            //Update the needed value if it does
-            if (res.rows.length > 0) {
-                //Query has already been purified, so no need to check again
-                let needed = res.rows[0].needed + count;
-                const updateQueryString = 'UPDATE DeckContent SET needed=$1 WHERE did=$2 AND cardname=$3;';
-                const resUpdate = await this.client.query(updateQueryString, [needed, deckId, name]);
-                return { ok: true };
-            } else {
-                //Add the card to the collection if it does not
-                let pureQuery = this.purifyQuery(this.deckContentTable, {
-                    cardname: name,
-                    did: deckId,
-                    setname: set,
-                    needed: count
-                }, true);
-                if (pureQuery.ok) {
-                    let queryString = `INSERT INTO DeckContent (${pureQuery.cols.join(', ')}) VALUES (${pureQuery.replacers.join(', ')});`;
-                    const res = await this.client.query(queryString, pureQuery.values);
-                    return { ok: true };
-                } else {
-                    return { ok: false, error: 'pureQuery not OK' };
-                }
-            }
-        } catch (e) {
-            return { ok: false, error: e };
-        }
-    }
     /**
-     * Returns the data of the default card in the database with the specified name.
-     * Returns ok: false if the card does not exist.
+     * Gets the user information from the email.
+     * Returns undefined if unsuccesful
+     * 
+     * @param {string} email 
+     * @returns user data
+     */
+    async getUserFromEmail(email) {
+        //Check if the user exists
+        let queryString = `SELECT * FROM Users WHERE email=$1;`;
+        const res = await this.runQuery(queryString, [email]);
+
+        //Return the user data if it exists, undefined otherwise
+        return res && res.length ? res[0] : res;
+    }
+
+    /**
+     * Imports a deck to the users decklists and returns its deck id
+     * 
+     * @param {string} email 
+     * @param {string} contents 
+     * @param {string} deckname 
+     * @returns deck id
+     */
+    async importDeck(email, contents, deckname) {
+        //Get card data
+        const parsedData = parseMTGCSV(contents);
+
+        //Add the card to the database if needed
+        const correctedData = {};
+
+        //Create an array to track cards that could not be added
+        const skippedCards = [];
+
+        for (const cardname in parsedData) {
+            const res = await this.addCard(cardname);
+            if (res) {
+                //Set the name to the scryfall official name
+                correctedData[res.cardname] = parsedData[cardname];
+            } else {
+                //Skip and add to the invalid list if it is not found
+                skippedCards.push(cardname);
+            }
+        }
+
+        //Generate random deck ID
+        const did = randomUUID();
+        const createDeckQuery = `INSERT INTO Decks (did, deckname, email) VALUES ($1, $2, $3);`;
+        const res = await this.runQuery(createDeckQuery, [did, deckname, email]);
+
+        //Return undefined if the deck could not be created
+        if (!res) { return undefined; }
+
+        //Add each card to the deck
+        for (const cardname in correctedData) {
+            //Get the default card
+            const card = await this.getDefaultCard(cardname);
+
+            //Add to the skipped cards array if there is no default card in the db
+            if (!card) { skippedCards.push(cardname); }
+
+            //Add the card to the created deck
+            const res = await this.addCardToDeck(card.cardname, card.setname, correctedData[cardname], did);
+
+            //Push to the skippedCards array if there was a database error
+            if (!res) { skippedCards.push(cardname); };
+        }
+
+        //Log the skipped cards
+        if (skippedCards.length > 0) { console.log(skippedCards); }
+
+        //Return all the skipped cards and the deck id
+        return { skipped: skippedCards, did: did };
+    }
+
+    /**
+     * Querys the database and returns an array of deck names and
+     * the associated ids that belong to the user
+     * 
+     * @param {string} email 
+     * @returns 
+     */
+    async getUserDecks(email) {
+        let queryString = `SELECT deckname, did FROM Decks WHERE email=$1`;
+        return await this.runQuery(queryString, [email]);
+    }
+
+    /**
+     * Returns the contents of the deck as an array of cards and
+     * the amount of each card the deck needs
+     * 
+     * @param {string} did 
+     * @returns deck contents
+     */
+    async getDeckContents(did) {
+        let queryString = `SELECT * FROM DeckContent NATURAL JOIN Cards WHERE did=$1`;
+        return await this.runQuery(queryString, [did]);
+    }
+
+    /**
+     * Adds a card with the specified data to the deck with the specified id.
+     * Returns an empty array on success and undefined on an error.
+     * 
+     * @param {string} cardname 
+     * @param {string} setname 
+     * @param {number} count 
+     * @param {string} did 
+     * @returns empty array or undefined
+     */
+    async addCardToDeck(cardname, setname, count, did) {
+        //Query the database to check that the deck already contains the card
+        let queryString = `SELECT needed FROM DeckContent WHERE did=$1 AND cardname=$2;`;
+        const res = await this.runQuery(queryString, [did, cardname]);
+
+        //Return undefined if the result is not valid
+        if (!res) { return undefined; }
+
+        //Update the needed value if it exists
+        if (res.length > 0) {
+            //Increase the amount needed
+            let needed = res[0].needed + count;
+            queryString = 'UPDATE DeckContent SET needed=$1 WHERE did=$2 AND cardname=$3;';
+            return await this.runQuery(queryString, [needed, did, cardname]);
+        } else {
+            //Create the card entry and set the amount needed if it dose not yet exist
+            queryString = `INSERT INTO DeckContent (did, cardname, setname, needed) VALUES ($1, $2, $3, $4);`;
+            return await this.runQuery(queryString, [did, cardname, setname, count]);
+        }
+    }
+
+    /**
+     * Returns the data from the default card if it exists and undefined
+     * if it does not, or if there is a database error.
      * 
      * @param {string} name 
-     * @returns ok, card?, error?
+     * @returns default card
      */
-    async getDefaultCard(name) {
-        if (typeof name === 'string') {
-
-        }
+    async getDefaultCard(cardname) {
+        //Get the card from the database
         let queryString = 'SELECT * FROM Cards WHERE cardname=$1 AND defaultcard=true;';
-        try {
-            const res = await this.client.query(queryString, [name]);
-            if (res.rows.length > 0) {
-                return { ok: true, card: res.rows[0] };
-            } else {
-                return { ok: false, error: 'Card does not exist' };
-            }
-        } catch (e) {
-            return { ok: false, error: 'Database Error' };
-        }
-    }
+        const res = await this.runQuery(queryString, [cardname]);
 
-    async getCardData() {
-        let queryString = 'SELECT cardname, setname FROM Cards;';
-        try {
-            const res = await this.client.query(queryString, []);
-            if (res.rows.length > 0) {
-                return { ok: true, cards: res.rows };
-            } else {
-                return { ok: false, error: 'No cards' };
-            }
-        } catch (e) {
-            return { ok: false, error: 'Database Error' };
-        }
+        //Return the card data if it exists or undefined otherwise
+        return res && res.length ? res[0] : res;
     }
 
     /**
-     * Adds a card and all iat's set varients to the database, including the 'default' version.
-     * Skips all cards currently in the database
-     * @param {string} name 
-     * @returns ok, skipped?
+     * Returns all card data in the database
+     * 
+     * @returns card data
      */
-    async addCard(name) {
-        const cardData = await getCardData(name);
-        if (!cardData.ok) {
-            return { ok: false, error: `Scryfall cannot find card '${name}'` };
-        }
+    async getAllCardData() {
+        let queryString = 'SELECT cardname, setname FROM Cards;';
+        return await this.runQuery(queryString, []);
+    }
 
+    /**
+     * Adds the card to the database.
+     * Returns an array of all sets that could not be uploaded
+     * and the scryfall cardname
+     * 
+     * @param {string} cardname 
+     * @returns array of skipped cards
+     */
+    async addCard(cardname) {
+        //Get the card data from scryfall
+        const cardData = await getCardData(cardname);
+
+        //Return undefined if there is an error getting the data
+        if (!cardData) { return undefined; }
+
+        //Get the set information and the cardname
         const cardsBySet = cardData.setData;
-        const cardname = cardData.cardname;
+        const actualCardName = cardData.cardname;
+
+        //Create an array for skipped values
         const skipped = [];
 
         //Check if the card is in the database
-        for (const set in cardsBySet) {
-            let checkExistsQuery = 'SELECT cardname, setname FROM Cards WHERE cardname=$1 AND setname=$2';
-            try {
-                const res = await this.client.query(checkExistsQuery, [cardname, set]);
-                if (res.rows.length === 1) {
-                    continue; //Skip adding the card if it exists
-                }
-            } catch (e) {
-                skipped.push(set);
-                continue; //Do not continue if there was a database error
-            }
+        for (const setname in cardsBySet) {
+            let queryString = 'SELECT cardname, setname FROM Cards WHERE cardname=$1 AND setname=$2';
+            const exists = await this.runQuery(queryString, [actualCardName, setname], e => {
+                //Push to the skipped array if there is an error
+                skipped.push(setname);
+                console.log(e);
+            });
 
-            //Add the card if necesary
-            let query = this.purifyQuery(this.cardTable, { ...cardsBySet[set], cardname: cardname, setname: set }, true);
-            if (query.ok) {
-                let queryString = `INSERT INTO Cards (${query.cols.join(', ')}) VALUES (${query.replacers.join(', ')});`;
-                try {
-                    const res = await this.client.query(queryString, query.values);
-                } catch (e) {
-                    skipped.push(set);
-                    continue;
-                }
-            } else {
-                skipped.push(set);
-                continue;
-            }
+            //Don't add to the database if there was an error or the card exists in the database
+            if ((exists !== undefined && exists.length > 0) || !exists) { continue; }
+
+            //Insert the card into the database
+            const card = cardsBySet[setname];
+            queryString = `INSERT INTO Cards (
+                cardname,
+                setname,
+                img,
+                colors,
+                identity,
+                cmc,
+                rarity,
+                defaultcard,
+                bulk
+            ) VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9
+            );`;
+            await this.runQuery(queryString, [
+                actualCardName,
+                setname,
+                card.img,
+                card.colors,
+                card.identity,
+                card.cmc,
+                card.rarity,
+                card.defaultcard,
+                card.bulk
+            ], e => {
+                skipped.push(setname);
+                console.log(e);
+            });
         }
 
-        //Return not ok if any of the cards were skipped
-        if (skipped.length > 0) {
-            return { ok: false, skipped: skipped, error: `[${cardname}: ${skipped.join(', ')}] could not be added to the database` };
-        } else {
-            return { ok: true, cardname: cardname };
-        }
+        //Return the sets that got skipped and actual name of the card
+        return { skipped: skipped, cardname: actualCardName };
     }
 
-    async addToCollection(user, name, amt) {
-        const cardData = await this.getDefaultCard(name);
-        const card = cardData.card;
-        const query = this.purifyQuery(this.collectionTable, {
-            cardname: name,
-            email: user,
-            has: amt,
-            setname: card.setname
-        });
+    /**
+     * Adds a card to the users collection. Directly
+     * sets the value to the specified amount. Returns
+     * an empty array on success and undefined on an error
+     * 
+     * @param {string} email 
+     * @param {string} cardname 
+     * @param {string} amt 
+     * @returns 
+     */
+    async addToCollection(email, cardname, amt) {
+        //Get the card
+        const card = await this.getDefaultCard(cardname);
 
-        //Add cards to the db
-        let checkExistsQuery = 'SELECT has FROM Collections WHERE cardname=$1 AND email=$2;';
-        try {
-            const res = await this.client.query(checkExistsQuery, [name, user]);
-            console.log(res.rows)
-            if (res.rows.length === 0) {
-                let addQuery = `INSERT INTO Collections (${query.cols.join(', ')}) VALUES (${query.replacers.join(', ')});`;
-                console.log(addQuery);
-                const added = await this.client.query(addQuery, query.values);
-                return { ok: true };
-            } else {
-                let updateQuery = `UPDATE Collections SET has=$1 WHERE cardname=$2 AND email=$3 AND setname=$4;`;
-                console.log(updateQuery, [amt, name, user, card.setname]);
-                const updated = await this.client.query(updateQuery, [amt, name, user, card.setname]);
-                return { ok: true };
-            }
-        } catch (e) {
-            return { ok: false, error: 'Could not add to collection' };
-        }
-    }
+        //See if the card exists
+        let queryString = 'SELECT has FROM Collections WHERE cardname=$1 AND email=$2;';
+        const exists = await this.runQuery(queryString, [cardname, email]);
 
-    async getUserCollection(user) {
-        if (typeof user === 'string') {
-            const queryString = 'SELECT cardname, has FROM Collections WHERE email=$1;'
-            try {
-                const res = await this.client.query(queryString, [user]);
-                return { ok: true, data: res.rows };
-            } catch (e) {
-                return { ok: false, error: 'Could not get collection' };
-            }
-        } else {
-            return { ok: false, error: 'Invalid email' }
+        //Add it if it does not exist
+        if (exists && !exists.length) {
+            queryString = `INSERT INTO Collections (cardname, email, setname, has) VALUES ($1, $2, $3, $4);`;
+            return await this.client.query(queryString, [cardname, email, card.setname, amt]);
+        } else { //Update it if it dose
+            queryString = `UPDATE Collections SET has=$1 WHERE cardname=$2 AND email=$3 AND setname=$4;`;
+            return await this.client.query(queryString, [amt, cardname, email, card.setname]);
         }
     }
 
     /**
-     * Takes in a table object and compares the types to the input object.
-     * Options: user, deck, card, collection, deckContent
+     * Gets the cards in a users collection.
      * 
-     * @param {string} table
-     * @param {object} query
+     * @param {string} email 
+     * @returns 
      */
-    checkTypes(table, query) {
-        //Create storage objs
-        let missing = {};
-        let invalid = {};
-        let valid = {};
-
-        //Get the types object
-        let types = table.types;
-
-        //Make sure the table is ok
-        if (table.ok) {
-            //Check every type in the query obj
-            for (const key in types) {
-                //If the key does not exist in the query, add it to missing
-                if (!query.hasOwnProperty(key)) {
-                    missing[key] = types[key];
-                    //If the key exists but is not the right type, add it to invalid
-                } else if (typeof query[key] !== types[key]) {
-                    invalid[key] = query[key];
-                    //If it exists and is the right type, add it to valid
-                } else {
-                    valid[key] = query[key];
-                }
-            }
-
-            //Return an object with the missing, invalid, and valid data
-            return {
-                missing: missing,
-                missingCount: Object.keys(missing).length,
-                invalid: invalid,
-                invalidCount: Object.keys(invalid).length,
-                valid: valid,
-                validCount: Object.keys(valid).length,
-                //Add a toString function for logging data
-                toString: function () {
-                    let invalid = `${this.invalidCount ? `invalid: ${Object.keys(this.invalid).join(', ')}` : ''}`;
-                    let missing = `\n${this.missingCount ? `missing: ${Object.keys(this.missing).join(', ')}` : ''}`;
-                    let valid = `\n${this.valid ? `valid  : ${Object.keys(this.valid).join(', ')}` : ''}`;
-                    return invalid + missing + valid;
-                },
-                //Return not ok if the number of valid keys is niot the same as the number of input keys
-                ok: Object.keys(valid).length === Object.keys(table.types).length
-            };
-        } else {
-            //Return an error if the table is invalid
-            return { ok: false, error: 'Invalid table' };
-        }
+    async getUserCollection(email) {
+        const queryString = 'SELECT cardname, has FROM Collections WHERE email=$1;'
+        return await this.runQuery(queryString, [email]);
     }
 
-    layoutQueryValueArray(table, query) {
-        //Determine that the table is valid
-        if (table.ok) {
-
-            //Force the values from the query object to be in the correct column order
-            return table.cols.reduce((p, c) => {
-                //Only add values that exist in the query
-                if (query.hasOwnProperty(c)) {
-                    p.cols.push(c);
-                    p.values.push(typeof query[c] === 'string' ? `${query[c]}` : query[c]);
-                    return p;
+    /**
+     * Delets the deck wuith the specified id
+     * from the database. Returns the deck contents
+     * on success and undefined on an error.
+     * 
+     * @param {string} email 
+     * @param {string} did 
+     * @returns 
+     */
+    async deleteDeck(email, did) {
+        //Check if the deck exists
+        let queryString = 'SELECT did FROM Decks WHERE email=$1 AND did= CAST ($2 AS UUID);';
+        const exists = await this.runQuery(queryString, [email, did]);
+        if (exists) {
+            //If it exists, delete all cards from the deckContents table
+            queryString = 'DELETE FROM DeckContent WHERE did= CAST ($1 AS UUID) RETURNING cardname, needed;'
+            const contents = await this.runQuery(queryString, [did]);
+            if (contents) {
+                //If successful, delete the deck itself
+                queryString = 'DELETE FROM Decks WHERE did= CAST ($1 AS UUID) RETURNING *;'
+                const res = await this.runQuery(queryString, [did]);
+                if (res) {
+                    //If the deck got deleted, return the deck data and the deck contents
+                    return { ...res[0], contents: contents };
                 } else {
-                    return p;
+                    //If the deck was not deleted, return the contents
+                    return contents;
                 }
-            }, { cols: [], values: [], ok: true });
-        } else {
-            //Return an error if the table is not ok
-            return { ok: false, error: `table ${table} does not exist` }
-        }
-    }
-
-    purifyQuery(table, query, strict) {
-        if (!table.ok) {
-            return { ok: false, error: 'Table does not exist' };
-        }
-        let typedQuery = this.checkTypes(table, query);
-        if (strict && !typedQuery.ok) {
-            return {
-                ok: false,
-                error: typedQuery.toString(),
-                missing: typedQuery.missing,
-                invalid: typedQuery.invalid
+            } else {
+                return undefined;
             }
+        } else {
+            return exists;
         }
-        let data = this.layoutQueryValueArray(table, typedQuery.valid);
-        return {
-            cols: data.cols,
-            replacers: data.cols.map((x, i) => `$${i + 1}`),
-            values: data.values,
-            name: table.name,
-            missing: typedQuery.missing,
-            invalid: typedQuery.invalid,
-            ok: true
-        };
     }
 
 }
 
 const db = new Database(process.env.DATABASE_URL);
 
-export { db }
+export { db };
