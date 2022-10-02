@@ -36,7 +36,7 @@ class Database {
         this.deckContentTable = new SQLTable('DeckContent');
         this.userTable = new SQLTable('Users');
         this.dudTable = new SQLTable('');
-
+        
     }
 
     //Connect to the DB

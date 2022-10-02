@@ -1,7 +1,7 @@
 import express from 'express';
 import jwtSigner from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
-import { db } from './database.js';
+import { db } from './database2.js';
 import * as crypto from 'crypto';
 const { sign, verify } = jwtSigner;
 
@@ -67,7 +67,7 @@ apiRoute.put('/users', async (req, res) => {
         const pass = await hash(password);
 
         const result = await db.createNewUser(e, pass); //TODO: Create this function in the database
-        if (result.ok) {
+        if (result) {
             const signedJWT = sign({ user: result }, SUPER_SECRET, { expiresIn: '1 day' });
             res.cookie('auth', signedJWT, { maxAge: 43200000 });
             res.status(201).send();
@@ -85,7 +85,7 @@ apiRoute.post('/users/login', async (req, res) => {
     try {
         const { email, password } = req.body;
         let user = await db.getUserFromEmail(email);//TODO: Create function in database
-        if (user !== undefined && user.ok && await verifyPass(password, user.password)) {
+        if (user !== undefined && await verifyPass(password, user.password)) {
             const signedJWT = sign({ user: user.email }, SUPER_SECRET, { expiresIn: '1 day' });
             res.cookie('auth', signedJWT, { maxAge: 43200000 });
             res.status(200).send();
@@ -94,6 +94,7 @@ apiRoute.post('/users/login', async (req, res) => {
             res.status(401).send('Password not validated');
         }
     } catch (e) {
+        console.log(e)
         res.status(500).send();
     }
 });
@@ -107,10 +108,10 @@ apiRoute.put('/users/decks', async (req, res) => {
     }
     const body = req.body;
     let dbResponse = await db.importDeck(authInfo.data.user, body.deckContent, body.deckName); //TODO: Database function to import deck object and assign cards to user
-    if (!dbResponse.ok) {
-        return res.status(422).send({ error: dbResponse.error.toString() });
+    if (!dbResponse) {
+        return res.status(422).send({ res: dbResponse });
     }
-    res.status(201).send({ deckId: dbResponse.deckId });
+    res.status(201).send({ did: dbResponse });
 });
 
 //Delete a specific deck
@@ -124,10 +125,10 @@ apiRoute.delete('/users/decks', async (req, res) => {
         return res.status(401).send();
     }
     const dbResponse = await db.deleteDeck(authInfo.data.user, req.body.deckID); //TODO: Database function to delete based on deckID VALIDATE THE USER IS THE RIGHT ONE
-    if (!dbResponse.ok) {
-        return res.status(400).send({ error: dbResponse.error });
+    if (!dbResponse) {
+        return res.status(400).send();
     }
-    res.status(202).send(dbResponse.rows);
+    res.status(202).send(dbResponse);
 });
 
 //Get a users decks
@@ -139,10 +140,10 @@ apiRoute.get('/users/decks', async (req, res) => {
         return res.status(401).send();
     }
     const dbResponse = await db.getUserDecks(authInfo.data.user);
-    if (!dbResponse.ok) {
-        return res.status(400).send({ error: dbResponse.error });
+    if (!dbResponse) {
+        return res.status(400).send();
     }
-    return res.status(200).send({ data: dbResponse.deck });
+    return res.status(200).send({ data: dbResponse });
 });
 
 apiRoute.post('/users/decks/content', async (req, res) => {
@@ -154,10 +155,10 @@ apiRoute.post('/users/decks/content', async (req, res) => {
     }
     const body = req.body;
     const dbResponse = await db.getDeckContents(body.deckId);
-    if (!dbResponse.ok) {
-        return res.status(400).send({ error: dbResponse.error });
+    if (!dbResponse) {
+        return res.status(400).send();
     }
-    return res.status(200).send({ data: dbResponse.deck });
+    return res.status(200).send({ data: dbResponse });
 });
 
 //Get all cards in a users collection
@@ -171,10 +172,10 @@ apiRoute.get('/users/collection', async (req, res) => {
         return res.status(401).send();
     }
     const dbResponse = await db.getUserCollection(authInfo.data.user); //TODO: Database function to get all decks for requesting user
-    if (!dbResponse.ok) {
-        return res.status(400).send({ error: dbResponse.error.toString() });
+    if (!dbResponse) {
+        return res.status(400).send();
     }
-    res.status(201).send({ data: dbResponse.data });
+    res.status(201).send({ data: dbResponse });
 });
 
 //Update a users collection
@@ -188,8 +189,8 @@ apiRoute.patch('/users/collection', async (req, res) => {
         return res.status(401).send();
     }
     const dbResponse = await db.addToCollection(authInfo.data.user, req.body.cardName, req.body.totalAmount); //TODO: Database function to update collection data
-    if (!dbResponse.ok) {
-        return res.status(400).send({ error: dbResponse.error });
+    if (!dbResponse) {
+        return res.status(400).send();
     }
     res.status(200).send();
 });
@@ -203,11 +204,11 @@ apiRoute.get('/cards', async (req, res) => {
         // unauthenticated
         return res.status(401).send();
     }
-    const dbResponse = await db.getCardData(); //TODO: Database function to update collection data
-    if (!dbResponse.ok) {
-        return res.status(400).send({ error: dbResponse.error, data: dbResponse.rows });
+    const dbResponse = await db.getAllCardData(); //TODO: Database function to update collection data
+    if (!dbResponse) {
+        return res.status(400).send();
     }
-    res.status(200).send({ data: dbResponse.cards });
+    res.status(200).send({ data: dbResponse });
 });
 
 

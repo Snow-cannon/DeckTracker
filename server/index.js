@@ -1,5 +1,5 @@
 import express from 'express';
-import { db } from './database.js';
+import { db } from './database2.js';
 import apiRoute from './apiRouter.js';
 import { expressjwt as jwt } from "express-jwt";
 import cookieParser from 'cookie-parser';
