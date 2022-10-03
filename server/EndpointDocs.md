@@ -142,7 +142,7 @@ This documents the methods, bodies, and responses for the server endpoints.
     "deckid": "[id for created deck]",
     "unprocessed": [
         "[any card name]",
-        [...]
+        "..."
     ]
 }
 ```
@@ -206,7 +206,7 @@ This documents the methods, bodies, and responses for the server endpoints.
             "deckname": "[any deck name]",
             "deckid": "[any deck id]"
         }
-        ...
+        "..."
     ]
 }
 ```
