@@ -230,7 +230,7 @@ class Database {
      * @returns deck contents
      */
     async getDeckContents(deckid, email) {
-        let queryString = `SELECT * FROM DeckContent NATURAL JOIN Cards NATURAL JOIN Decks WHERE deckid=CAST($1 AS UUID) AND email=$2`;
+        let queryString = `SELECT c.cardname, c.img, c.setname, c.colors, c.identity, c.cmc, c.rarity, c.bulk, dc.needed FROM DeckContent AS dc NATURAL JOIN Cards AS c NATURAL JOIN Decks AS d WHERE deckid=CAST($1 AS UUID) AND email=$2`;
         return await this.runQuery(queryString, [deckid, email]);
     }
 
@@ -309,7 +309,7 @@ class Database {
             const exists = await this.runQuery(queryString, [actualCardName, setname], e => {
                 //Push to the skipped array if there is an error
                 skipped.push(setname);
-                console.log(e);
+                // console.log(e);
             });
 
             //Don't add to the database if there was an error or the card exists in the database
@@ -342,7 +342,7 @@ class Database {
                 card.bulk
             ], e => {
                 skipped.push(setname);
-                console.log(e);
+                // console.log(e);
             });
         }
 

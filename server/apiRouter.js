@@ -97,6 +97,7 @@ function authorize(skip) {
                 if (user === undefined) {
                     res.status(400).send('Email not found');
                 } else {
+                    //Pass the email through
                     res.locals['email'] = authInfo.data.user;
                     next();
                 }
@@ -123,7 +124,7 @@ apiRoute.put('/users/signup', async (req, res) => {
         let { email, password } = req.body;
         if (!email || !password) {
             //No response on bad email/password
-            return res.status(400).send();
+            return res.status(400).send('Missing email or password');
         }
         const e = email;
         const pass = await hash(password);
@@ -145,7 +146,11 @@ apiRoute.put('/users/signup', async (req, res) => {
 //Logs in a user
 apiRoute.post('/users/login', async (req, res) => {
     try {
-        const { email, password } = req.body;
+        let { email, password } = req.body;
+        if (!email || !password) {
+            //No response on bad email/password
+            return res.status(400).send('Missing email or password');
+        }
         let user = await db.getUserFromEmail(email);
         if (user !== undefined && await verifyPass(password, user.password)) {
             const signedJWT = sign({ user: user.email }, SUPER_SECRET, { expiresIn: '1 day' });
@@ -173,25 +178,35 @@ apiRoute.post('/users/login', async (req, res) => {
 
 //Returns the users email in the cookie if valid
 apiRoute.get('/users/data', async (req, res) => {
-    res.status(200).send({ email: res.locals.email });
+    try {
+        res.status(200).send({ email: res.locals.email });
+    } catch (e) {
+        res.status(500).send();
+    }
 });
 
 // Deletes a User
 apiRoute.delete('/users/data', async (req, res) => {
-    //Get the password from the request body
-    const { password } = req.body;
-
-    //Check that the user is valid
-    let user = await db.getUserFromEmail(res.locals.email);
-    if (user !== undefined && await verifyPass(password, user.password)) {
-        let deleteResult = await db.deleteUser(res.locals.email);
-        res.status(200).send({ result: deleteResult });
-    } else {
-        if (user === undefined) {
-            res.status(400).send('Email not found');
-        } else {
-            res.status(401).send('Password not validated');
+    try {
+        const body = req.body;
+        if (typeof body.password !== 'string') {
+            return res.status(400).send('No provided password');
         }
+
+        //Check that the user is valid
+        let user = await db.getUserFromEmail(res.locals.email);
+        if (user !== undefined && await verifyPass(body.password, user.password)) {
+            let deleteResult = await db.deleteUser(res.locals.email);
+            res.status(200).send({ result: deleteResult });
+        } else {
+            if (user === undefined) {
+                res.status(400).send('Email not found');
+            } else {
+                res.status(401).send('Password not validated');
+            }
+        }
+    } catch (e) {
+        res.status(500).send();
     }
 });
 
@@ -204,43 +219,65 @@ apiRoute.delete('/users/data', async (req, res) => {
 
 //Importing deck list
 apiRoute.put('/users/decks', async (req, res) => {
-    const body = req.body;
-    if (!body.deckName) {
-        return res.status(400).send('No provided deck name');
+    try {
+        const body = req.body;
+        if (!body.deckname) {
+            return res.status(400).send('No provided deck name');
+        } else if(!body.hasOwnProperty('deckcontent')) {
+            return res.status(400).send('No provided deck content');
+        }
+        let dbResponse = await db.importDeck(res.locals.email, body.deckcontent, body.deckname);
+        if (!dbResponse) {
+            return res.status(422).send();
+        }
+        res.status(201).send({ deckid: dbResponse.deckid, skipped: dbResponse.skipped });
+    } catch (e) {
+        console.log(e);
+        res.status(500).send();
     }
-    let dbResponse = await db.importDeck(res.locals.email, body.deckContent, body.deckName);
-    if (!dbResponse) {
-        return res.status(422).send();
-    }
-    res.status(201).send({ deckid: dbResponse.deckid, skipped: dbResponse.skipped });
 });
 
 //Delete a specific deck
 apiRoute.delete('/users/decks', async (req, res) => {
-    const dbResponse = await db.deleteDeck(res.locals.email, req.body.deckid);
-    if (!dbResponse) {
-        return res.status(400).send();
+    try {
+        const dbResponse = await db.deleteDeck(res.locals.email, req.body.deckid);
+        if (!dbResponse) {
+            return res.status(400).send();
+        }
+        res.status(200).send({ deck: dbResponse });
+    } catch (e) {
+        res.status(500).send();
     }
-    res.status(200).send({ deck: dbResponse });
 });
 
 //Get a users decks
 apiRoute.get('/users/decks', async (req, res) => {
-    const dbResponse = await db.getUserDecks(res.locals.email);
-    if (!dbResponse) {
-        return res.status(400).send();
+    try {
+        const dbResponse = await db.getUserDecks(res.locals.email);
+        if (!dbResponse) {
+            return res.status(400).send();
+        }
+        return res.status(200).send({ decks: dbResponse });
+    } catch (e) {
+        res.status(500).send();
     }
-    return res.status(200).send({ decks: dbResponse });
 });
 
 //Returns the contents of a specific deck
 apiRoute.post('/users/decks/content', async (req, res) => {
-    const body = req.body;
-    const dbResponse = await db.getDeckContents(body.deckid, res.locals.email);
-    if (!dbResponse) {
-        return res.status(400).send();
+    try {
+        const body = req.body;
+        if(!body.deckid){
+            return res.status(400).send('No provided deck id');
+        }
+        const dbResponse = await db.getDeckContents(body.deckid, res.locals.email);
+        if (!dbResponse) {
+            return res.status(400).send();
+        }
+        return res.status(202).send({ contents: dbResponse });
+    } catch (e) {
+        res.status(500).send();
     }
-    return res.status(202).send({ contents: dbResponse });
 });
 
 /**
@@ -252,20 +289,34 @@ apiRoute.post('/users/decks/content', async (req, res) => {
 
 //Get all cards in a users collection
 apiRoute.get('/users/collection', async (req, res) => {
-    const dbResponse = await db.getUserCollection(res.locals.email);
-    if (!dbResponse) {
-        return res.status(400).send();
+    try {
+        const dbResponse = await db.getUserCollection(res.locals.email);
+        if (!dbResponse) {
+            return res.status(400).send();
+        }
+        res.status(200).send({ collection: dbResponse });
+    } catch (e) {
+        res.status(500).send();
     }
-    res.status(200).send({ collection: dbResponse });
 });
 
 //Update a users collection
 apiRoute.patch('/users/collection', async (req, res) => {
-    const dbResponse = await db.addToCollection(res.locals.email, req.body.cardname, req.body.totalamount);
-    if (!dbResponse) {
-        return res.status(400).send();
+    try {
+        const body = req.body;
+        if(!body.cardname){
+            return res.status(400).send('Missing card name');
+        } else if(!body.totalamount || isNaN(body.totalamount) || body.totalamount < 0 || typeof body.totalamount !== 'number') {
+            return res.status(400).send('Missing amount');
+        }
+        const dbResponse = await db.addToCollection(res.locals.email, req.body.cardname, req.body.totalamount);
+        if (!dbResponse) {
+            return res.status(400).send();
+        }
+        res.status(201).send();
+    } catch (e) {
+        res.status(500).send();
     }
-    res.status(201).send();
 });
 
 
