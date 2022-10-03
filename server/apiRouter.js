@@ -197,7 +197,7 @@ apiRoute.delete('/users/data', async (req, res) => {
         let user = await db.getUserFromEmail(res.locals.email);
         if (user !== undefined && await verifyPass(body.password, user.password)) {
             let deleteResult = await db.deleteUser(res.locals.email);
-            res.status(200).send({ result: deleteResult });
+            res.status(200).send();
         } else {
             if (user === undefined) {
                 res.status(400).send('Email not found');
@@ -230,7 +230,7 @@ apiRoute.put('/users/decks', async (req, res) => {
         if (!dbResponse) {
             return res.status(422).send();
         }
-        res.status(201).send({ deckid: dbResponse.deckid, skipped: dbResponse.skipped });
+        res.status(201).send({ deckid: dbResponse.deckid, unprocessed: dbResponse.skipped });
     } catch (e) {
         console.log(e);
         res.status(500).send();
@@ -239,12 +239,16 @@ apiRoute.put('/users/decks', async (req, res) => {
 
 //Delete a specific deck
 apiRoute.delete('/users/decks', async (req, res) => {
+    const body = req.body;
+    if(!body.deckid){
+        res.status(400).send('No deck id');
+    }
     try {
         const dbResponse = await db.deleteDeck(res.locals.email, req.body.deckid);
         if (!dbResponse) {
             return res.status(400).send();
         }
-        res.status(200).send({ deck: dbResponse });
+        res.status(200).send();
     } catch (e) {
         res.status(500).send();
     }
@@ -255,7 +259,7 @@ apiRoute.get('/users/decks', async (req, res) => {
     try {
         const dbResponse = await db.getUserDecks(res.locals.email);
         if (!dbResponse) {
-            return res.status(400).send();
+            return res.status(500).send();
         }
         return res.status(200).send({ decks: dbResponse });
     } catch (e) {
@@ -292,7 +296,7 @@ apiRoute.get('/users/collection', async (req, res) => {
     try {
         const dbResponse = await db.getUserCollection(res.locals.email);
         if (!dbResponse) {
-            return res.status(400).send();
+            return res.status(500).send();
         }
         res.status(200).send({ collection: dbResponse });
     } catch (e) {

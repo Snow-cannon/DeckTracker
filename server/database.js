@@ -122,13 +122,7 @@ class Database {
                     if (decks) {
                         //Delete the user itself
                         queryString = 'DELETE FROM Users WHERE email=$1 RETURNING *;';
-                        const user = await this.runQuery(queryString, [email]);
-                        return {
-                            collection,
-                            contents,
-                            decks,
-                            email: user[0].email
-                        }
+                        return await this.runQuery(queryString, [email]);
                     }
                 }
             }
@@ -413,14 +407,7 @@ class Database {
             if (contents) {
                 //If successful, delete the deck itself
                 queryString = 'DELETE FROM Decks WHERE deckid=CAST($1 AS UUID) RETURNING *;'
-                const res = await this.runQuery(queryString, [deckid]);
-                if (res) {
-                    //If the deck got deleted, return the deck data and the deck contents
-                    return { ...res[0], contents: contents };
-                } else {
-                    //If the deck was not deleted, return the contents
-                    return { deckid: deckid, contents: contents };
-                }
+                return await this.runQuery(queryString, [deckid]);
             } else {
                 return undefined;
             }
