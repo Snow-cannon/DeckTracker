@@ -142,7 +142,7 @@ This documents the methods, bodies, and responses for the server endpoints.
     "deckid": "[id for created deck]",
     "unprocessed": [
         "[any card name]",
-        ... 
+        [...]
     ]
 }
 ```
@@ -246,11 +246,11 @@ This documents the methods, bodies, and responses for the server endpoints.
             "setname": "[any set name]",
             "colors": "[combo of chars from 'WUBRG']",
             "identity": "[combo of chars from 'WUBRG']",
-            "cmc": 0 ~ inf,
+            "cmc": "[0 ~ inf]",
             "rarity": "[Name of any rarity]",
             "bulk": "[Stringified JSON data]"
         },
-        ...
+        "..."
     ]
 }
 ```
@@ -282,9 +282,9 @@ This documents the methods, bodies, and responses for the server endpoints.
     "collection": [
         {
             "cardname": "[any card name]",
-            "has": 0 ~ inf
+            "has": "[0 ~ inf]"
         },
-        ...
+        "..."
     ]
 }
 ```
@@ -310,7 +310,7 @@ This documents the methods, bodies, and responses for the server endpoints.
 ```json
 {
     "cardname": "[any card name]",
-    "totalamount": 0 ~ inf
+    "totalamount": "[0 ~ inf]"
 }
 ```
 
